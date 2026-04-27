@@ -8,6 +8,7 @@ import type {
   MaterialBatchVersion,
   MaterialFile,
   ModelConnection,
+  ParseElementsPage,
   ParseFileRun,
   ParseFileRunDetail,
   ParsePlan,
@@ -224,6 +225,17 @@ export function useParserStrategies() {
   })
 }
 
+export function useRefreshParserStrategies() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiClient.post<ParserStrategy[]>('/parser-strategies/refresh'),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['parser-strategies'], data)
+      queryClient.invalidateQueries({ queryKey: ['parse-plan'] })
+    },
+  })
+}
+
 export function useParsePlan(batchId?: string) {
   return useQuery({
     queryKey: ['parse-plan', batchId],
@@ -253,6 +265,16 @@ export function useParseRuns() {
   })
 }
 
+export function useDeleteParseRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => apiClient.delete(`/parse-runs/${runId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parse-runs'] })
+    },
+  })
+}
+
 export function useParseRun(runId?: string) {
   return useQuery({
     queryKey: ['parse-run', runId],
@@ -278,6 +300,22 @@ export function useParseFileRunDetail(runId?: string, fileRunId?: string) {
   return useQuery({
     queryKey: ['parse-file-run-detail', runId, fileRunId],
     queryFn: () => apiClient.get<ParseFileRunDetail>(`/parse-runs/${runId}/files/${fileRunId}`),
+    enabled: Boolean(runId && fileRunId),
+  })
+}
+
+export function useParseFileRunElements(
+  runId?: string,
+  fileRunId?: string,
+  offset = 0,
+  limit = 50,
+) {
+  return useQuery({
+    queryKey: ['parse-file-run-elements', runId, fileRunId, offset, limit],
+    queryFn: () =>
+      apiClient.get<ParseElementsPage>(
+        `/parse-runs/${runId}/files/${fileRunId}/elements?offset=${offset}&limit=${limit}`,
+      ),
     enabled: Boolean(runId && fileRunId),
   })
 }

@@ -20,6 +20,7 @@ class ParserStrategySpec:
     supported_file_exts: tuple[str, ...]
     capabilities: tuple[str, ...]
     config_schema: dict = field(default_factory=dict)
+    default_config: dict = field(default_factory=dict)
     source: str = "autorag"
     enabled: bool = True
     loaded_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -36,6 +37,8 @@ class ParserStrategySpec:
         missing_env = [name for name in self.required_env_vars if not os.getenv(name)]
         if missing_env:
             return ParserAvailability("missing_env", f"Missing environment variables: {', '.join(missing_env)}")
+        if not self.executable:
+            return ParserAvailability("adapter_only", "Registered for configuration; executable adapter is pending.")
         missing_deps = []
         for dependency in self.required_dependencies:
             try:
@@ -48,8 +51,6 @@ class ParserStrategySpec:
             return ParserAvailability("missing_dependency", f"Missing Python dependencies: {', '.join(missing_deps)}")
         if self.requires_config:
             return ParserAvailability("needs_config", "Parser requires per-run configuration.")
-        if not self.executable:
-            return ParserAvailability("adapter_only", "Registered for configuration; executable adapter is pending.")
         return ParserAvailability("available", "Available")
 
 
@@ -66,6 +67,7 @@ class ParserRegistry:
             supported_file_exts=normalized_exts,
             capabilities=strategy.capabilities,
             config_schema=strategy.config_schema,
+            default_config=strategy.default_config,
             source=strategy.source,
             enabled=strategy.enabled,
             loaded_at=strategy.loaded_at,
@@ -132,12 +134,16 @@ def schema(properties: dict, required: list[str] | None = None) -> dict:
     return {"type": "object", "properties": properties, "required": required or []}
 
 
+TEXT_DEFAULT_CONFIG = {"encoding": "utf-8"}
+PDF_DEFAULT_CONFIG = {"mode": "single"}
+
+
 parser_registry = ParserRegistry()
 
 for name, display, dependency, executable in [
     ("pdfminer", "PDFMiner", "pdfminer.high_level", True),
     ("pdfplumber", "PDFPlumber", "pdfplumber", True),
-    ("pypdfium2", "PyPDFium2", "pypdfium2", False),
+    ("pypdfium2", "PyPDFium2", "pypdfium2", True),
     ("pypdf", "PyPDF", "pypdf", True),
     ("pymupdf", "PyMuPDF", "fitz", True),
     ("unstructuredpdf", "UnstructuredPDF", "unstructured", False),
@@ -150,6 +156,7 @@ for name, display, dependency, executable in [
             supported_file_exts=(".pdf",),
             capabilities=("pdf", "autorag", "langchain_parse"),
             config_schema=schema({"mode": {"type": "string", "enum": ["single", "page"]}}),
+            default_config=PDF_DEFAULT_CONFIG,
             required_dependencies=(dependency,),
             executable=executable,
             autorag_module_type="langchain_parse",
@@ -165,6 +172,7 @@ parser_registry.register(
         supported_file_exts=(".csv",),
         capabilities=("csv", "table", "autorag", "langchain_parse"),
         config_schema=schema({"encoding": {"type": "string"}}),
+        default_config=TEXT_DEFAULT_CONFIG,
         autorag_module_type="langchain_parse",
         autorag_parse_method="csv",
     )
@@ -178,6 +186,7 @@ parser_registry.register(
         supported_file_exts=(".json",),
         capabilities=("json", "autorag", "langchain_parse"),
         config_schema=schema({"jq_schema": {"type": "string"}}, required=["jq_schema"]),
+        default_config={"encoding": "utf-8", "jq_schema": ""},
         requires_config=True,
         autorag_module_type="langchain_parse",
         autorag_parse_method="json",
@@ -197,6 +206,7 @@ for name, display, exts in [
             supported_file_exts=exts,
             capabilities=("text", "autorag", "langchain_parse"),
             config_schema=schema({"encoding": {"type": "string"}}),
+            default_config=TEXT_DEFAULT_CONFIG,
             autorag_module_type="langchain_parse",
             autorag_parse_method=name,
         )
@@ -215,6 +225,7 @@ for name, env_vars, description in [
             supported_file_exts=(".pdf", ".csv", ".json", ".md", ".markdown", ".html", ".htm", ".xml", ".txt"),
             capabilities=("all_files", "autorag", "langchain_parse"),
             config_schema=schema({"parse_method": {"type": "string"}}),
+            default_config={"parse_method": "auto"},
             required_env_vars=env_vars,
             executable=False,
             autorag_module_type="langchain_parse",
@@ -237,6 +248,7 @@ parser_registry.register(
                 "vendor_multimodal_model_name": {"type": "string"},
             }
         ),
+        default_config={"result_type": "markdown", "language": "en"},
         required_env_vars=("LLAMA_CLOUD_API_KEY",),
         executable=False,
         autorag_module_type="llama_parse",
@@ -251,6 +263,7 @@ parser_registry.register(
         supported_file_exts=(".pdf", ".png", ".jpg", ".jpeg"),
         capabilities=("ocr", "table", "cloud", "autorag"),
         config_schema=schema({"table_detection": {"type": "boolean"}}),
+        default_config={"table_detection": True},
         required_env_vars=("CLOVA_OCR_API_URL", "CLOVA_OCR_SECRET_KEY"),
         executable=False,
         autorag_module_type="clova",
@@ -273,6 +286,12 @@ parser_registry.register(
             },
             required=["text_parse_module", "table_parse_module"],
         ),
+        default_config={
+            "text_parse_module": "pdfminer",
+            "text_params": PDF_DEFAULT_CONFIG,
+            "table_parse_module": "pdfplumber",
+            "table_params": {},
+        },
         required_dependencies=("pdfplumber",),
         requires_config=True,
         executable=False,
@@ -288,6 +307,7 @@ parser_registry.register(
         supported_file_exts=(".txt", ".log"),
         capabilities=("text", "fast", "local"),
         config_schema=schema({"encoding": {"type": "string"}}),
+        default_config=TEXT_DEFAULT_CONFIG,
         source="built_in",
     )
 )

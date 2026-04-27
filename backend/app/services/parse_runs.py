@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,6 +20,7 @@ from app.parsers.registry import parser_registry
 from app.schemas.materials import (
     MaterialBatchOut,
     MaterialFileOut,
+    ParseElementsPageOut,
     ParseFileRunDetailOut,
     ParseFileRunOut,
     ParseFileSelection,
@@ -41,6 +43,7 @@ def parser_strategy_out(strategy) -> ParserStrategyOut:
         supported_file_exts=list(strategy.supported_file_exts),
         capabilities=list(strategy.capabilities),
         config_schema=strategy.config_schema,
+        default_config=strategy.default_config,
         source=strategy.source,
         enabled=strategy.enabled,
         loaded_at=strategy.loaded_at,
@@ -73,6 +76,17 @@ async def list_parser_strategies() -> list[ParserStrategyOut]:
     return [parser_strategy_out(strategy) for strategy in parser_registry.list_enabled()]
 
 
+def _parser_config_from_rule(rule: ProcessingDefaultRule | None, strategy) -> dict:
+    if rule and rule.parser_config_yaml:
+        try:
+            parsed = json.loads(rule.parser_config_yaml)
+        except json.JSONDecodeError:
+            parsed = {}
+        if isinstance(parsed, dict):
+            return strategy.default_config | parsed
+    return dict(strategy.default_config)
+
+
 async def get_parse_plan(session: AsyncSession, batch_id: str) -> ParsePlanOut:
     batch = await material_service.get_batch(session, batch_id)
     await material_service._ensure_processing_rules(session)
@@ -92,11 +106,14 @@ async def get_parse_plan(session: AsyncSession, batch_id: str) -> ParsePlanOut:
         default_parser_name = rule.parser_name if rule and rule.enabled else (
             default_strategy.parser_name if default_strategy else None
         )
+        selected_default_strategy = parser_registry.get(default_parser_name) if default_parser_name else None
         files.append(
             ParsePlanFileOut(
                 file=MaterialFileOut.model_validate(file, from_attributes=True),
                 default_parser_name=default_parser_name,
-                default_parser_config={},
+                default_parser_config=_parser_config_from_rule(rule, selected_default_strategy)
+                if selected_default_strategy
+                else {},
                 parser_options=options,
             )
         )
@@ -192,6 +209,21 @@ async def get_parse_run(session: AsyncSession, run_id: str) -> ParseRunOut:
     return parse_run_out(await get_parse_run_model(session, run_id))
 
 
+async def delete_parse_run(session: AsyncSession, run_id: str) -> None:
+    run = await get_parse_run_model(session, run_id)
+    await session.delete(run)
+    await session.commit()
+    artifact_dir = _artifact_root() / run_id
+    root = _artifact_root().resolve()
+    resolved_artifact_dir = artifact_dir.resolve()
+    if resolved_artifact_dir.exists() and resolved_artifact_dir.is_dir():
+        try:
+            resolved_artifact_dir.relative_to(root)
+        except ValueError as exc:
+            raise RuntimeError("Parse artifact path escaped artifact root") from exc
+        shutil.rmtree(resolved_artifact_dir)
+
+
 async def list_parse_file_runs(session: AsyncSession, run_id: str) -> list[ParseFileRunOut]:
     await get_parse_run_model(session, run_id)
     rows = (
@@ -220,6 +252,34 @@ async def get_parse_file_run_detail(
         file_run=parse_file_run_out(file_run),
         parsed_document=ParsedDocumentOut.model_validate(parsed, from_attributes=True) if parsed else None,
     )
+
+
+def _paginate_elements(
+    elements: list[dict], offset: int = 0, limit: int = 50
+) -> ParseElementsPageOut:
+    normalized_offset = max(offset, 0)
+    normalized_limit = min(max(limit, 1), 500)
+    return ParseElementsPageOut(
+        items=elements[normalized_offset : normalized_offset + normalized_limit],
+        total=len(elements),
+        offset=normalized_offset,
+        limit=normalized_limit,
+    )
+
+
+async def get_parse_file_run_elements(
+    session: AsyncSession, run_id: str, file_run_id: str, offset: int = 0, limit: int = 50
+) -> ParseElementsPageOut:
+    file_run = await session.scalar(
+        select(ParseFileRun)
+        .where(ParseFileRun.run_id == run_id, ParseFileRun.file_run_id == file_run_id)
+        .options(selectinload(ParseFileRun.parsed_document))
+    )
+    if not file_run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parse file run not found")
+    parsed = file_run.parsed_document
+    elements = parsed.elements if parsed else []
+    return _paginate_elements(elements, offset, limit)
 
 
 def _artifact_root() -> Path:

@@ -108,6 +108,13 @@ body {
   width: 100%;
 }
 
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .fullWidth {
   width: 100%;
 }
@@ -262,6 +269,10 @@ body {
 
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .pageHeader {
+    flex-direction: column;
   }
 
   .ruleGrid {

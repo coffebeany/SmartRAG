@@ -19,6 +19,7 @@ from app.schemas.materials import (
     ProcessingDefaultRuleOut,
     ProcessingDefaultRulesUpdate,
     UploadFilesOut,
+    ParseElementsPageOut,
 )
 from app.services import materials as material_service
 from app.services import parse_runs as parse_run_service
@@ -115,6 +116,13 @@ async def list_parser_strategies(
     return await material_service.list_parser_strategies(session)
 
 
+@router.post("/parser-strategies/refresh", response_model=list[ParserStrategyOut])
+async def refresh_parser_strategies(
+    session: AsyncSession = Depends(get_session),
+) -> list[ParserStrategyOut]:
+    return await material_service.refresh_parser_strategies(session)
+
+
 @router.get("/material-batches/{batch_id}/parse-plan", response_model=ParsePlanOut)
 async def get_parse_plan(
     batch_id: str, session: AsyncSession = Depends(get_session)
@@ -143,6 +151,11 @@ async def get_parse_run(run_id: str, session: AsyncSession = Depends(get_session
     return await parse_run_service.get_parse_run(session, run_id)
 
 
+@router.delete("/parse-runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_parse_run(run_id: str, session: AsyncSession = Depends(get_session)) -> None:
+    await parse_run_service.delete_parse_run(session, run_id)
+
+
 @router.get("/parse-runs/{run_id}/files", response_model=list[ParseFileRunOut])
 async def list_parse_file_runs(
     run_id: str, session: AsyncSession = Depends(get_session)
@@ -155,3 +168,19 @@ async def get_parse_file_run_detail(
     run_id: str, file_run_id: str, session: AsyncSession = Depends(get_session)
 ) -> ParseFileRunDetailOut:
     return await parse_run_service.get_parse_file_run_detail(session, run_id, file_run_id)
+
+
+@router.get(
+    "/parse-runs/{run_id}/files/{file_run_id}/elements",
+    response_model=ParseElementsPageOut,
+)
+async def get_parse_file_run_elements(
+    run_id: str,
+    file_run_id: str,
+    offset: int = 0,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_session),
+) -> ParseElementsPageOut:
+    return await parse_run_service.get_parse_file_run_elements(
+        session, run_id, file_run_id, offset, limit
+    )

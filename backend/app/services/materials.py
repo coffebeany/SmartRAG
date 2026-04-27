@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -320,6 +321,7 @@ async def list_parser_strategies(session: AsyncSession) -> list[ParserStrategyOu
             supported_file_exts=list(strategy.supported_file_exts),
             capabilities=list(strategy.capabilities),
             config_schema=strategy.config_schema,
+            default_config=strategy.default_config,
             source=strategy.source,
             enabled=strategy.enabled,
             loaded_at=strategy.loaded_at,
@@ -333,6 +335,11 @@ async def list_parser_strategies(session: AsyncSession) -> list[ParserStrategyOu
         )
         for strategy in parser_registry.list_enabled()
     ]
+
+
+async def refresh_parser_strategies(session: AsyncSession) -> list[ParserStrategyOut]:
+    importlib.invalidate_caches()
+    return await list_parser_strategies(session)
 
 
 async def _ensure_processing_rules(session: AsyncSession) -> None:

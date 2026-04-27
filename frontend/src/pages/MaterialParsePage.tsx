@@ -1,9 +1,22 @@
-import { App, Button, Card, Form, Input, Select, Space, Table, Tag, Typography } from 'antd'
+import { App, Button, Card, Form, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreateParseRun, useMaterialBatches, useParsePlan } from '../api/hooks'
 import type { ParsePlanFile, ParserStrategy } from '../api/types'
+
+const EXECUTABLE_STATUSES = new Set(['available', 'needs_config'])
+
+function stringifyConfig(config: Record<string, unknown> | undefined) {
+  return JSON.stringify(config ?? {}, null, 2)
+}
+
+function statusColor(status?: string) {
+  if (status === 'available') return 'green'
+  if (status === 'needs_config') return 'gold'
+  if (status === 'adapter_only') return 'blue'
+  return 'red'
+}
 
 export default function MaterialParsePage() {
   const { message } = App.useApp()
@@ -22,7 +35,7 @@ export default function MaterialParsePage() {
     const configMap: Record<string, string> = {}
     parsePlan.data.files.forEach((item) => {
       if (item.default_parser_name) parserMap[item.file.file_id] = item.default_parser_name
-      configMap[item.file.file_id] = JSON.stringify(item.default_parser_config ?? {}, null, 2)
+      configMap[item.file.file_id] = stringifyConfig(item.default_parser_config)
     })
     setParserByFile(parserMap)
     setConfigByFile(configMap)
@@ -31,36 +44,53 @@ export default function MaterialParsePage() {
   const selectedParser = (row: ParsePlanFile): ParserStrategy | undefined =>
     row.parser_options.find((parser) => parser.parser_name === parserByFile[row.file.file_id])
 
-  const parserLabel = (parser: ParserStrategy) =>
-    `${parser.display_name} · ${parser.availability_status}`
+  const changeParser = (row: ParsePlanFile, parserName: string) => {
+    const parser = row.parser_options.find((item) => item.parser_name === parserName)
+    setParserByFile((prev) => ({ ...prev, [row.file.file_id]: parserName }))
+    setConfigByFile((prev) => ({
+      ...prev,
+      [row.file.file_id]: stringifyConfig(parser?.default_config),
+    }))
+  }
+
+  const parserLabel = (parser: ParserStrategy) => (
+    <Space size={8}>
+      <span>{parser.display_name}</span>
+      <Tag color={statusColor(parser.availability_status)}>{parser.availability_status}</Tag>
+    </Space>
+  )
 
   const columns: ColumnsType<ParsePlanFile> = useMemo(
     () => [
       { title: '文件', render: (_, row) => row.file.original_filename },
-      { title: '格式', render: (_, row) => <Tag>{row.file.file_ext}</Tag> },
+      { title: '格式', width: 90, render: (_, row) => <Tag>{row.file.file_ext}</Tag> },
       {
         title: '解析器',
-        width: 320,
+        width: 340,
         render: (_, row) => (
           <Select
             className="fullWidth"
             value={parserByFile[row.file.file_id]}
-            onChange={(value) => setParserByFile((prev) => ({ ...prev, [row.file.file_id]: value }))}
+            onChange={(value) => changeParser(row, value)}
             options={row.parser_options.map((parser) => ({
               value: parser.parser_name,
               label: parserLabel(parser),
-              disabled: !['available', 'needs_config'].includes(parser.availability_status),
+              disabled: !EXECUTABLE_STATUSES.has(parser.availability_status),
             }))}
           />
         ),
       },
       {
         title: '状态',
+        width: 140,
         render: (_, row) => {
           const parser = selectedParser(row)
           if (!parser) return <Tag color="red">未选择</Tag>
-          const color = parser.availability_status === 'available' ? 'green' : parser.availability_status === 'needs_config' ? 'gold' : 'red'
-          return <Tag color={color}>{parser.availability_status}</Tag>
+          return (
+            <Tooltip title={parser.availability_reason}>
+              <Tag color={statusColor(parser.availability_status)}>{parser.availability_status}</Tag>
+            </Tooltip>
+          )
         },
       },
       {
@@ -72,8 +102,10 @@ export default function MaterialParsePage() {
             <Input.TextArea
               rows={parser?.requires_config ? 4 : 2}
               value={configByFile[row.file.file_id] ?? '{}'}
-              placeholder={parser?.requires_config ? '例如：{"jq_schema": ".content"}' : '{}'}
-              onChange={(event) => setConfigByFile((prev) => ({ ...prev, [row.file.file_id]: event.target.value }))}
+              placeholder={parser?.requires_config ? '{"jq_schema": ".content"}' : '{}'}
+              onChange={(event) =>
+                setConfigByFile((prev) => ({ ...prev, [row.file.file_id]: event.target.value }))
+              }
             />
           )
         },
@@ -112,7 +144,9 @@ export default function MaterialParsePage() {
     <Space direction="vertical" size={16} className="pageStack">
       <div>
         <Typography.Title level={3}>材料解析</Typography.Title>
-        <Typography.Text type="secondary">选择一个材料批次，按默认处理规则或手动选择解析器启动解析。</Typography.Text>
+        <Typography.Text type="secondary">
+          选择一个材料批次，系统会按默认处理规则自动填充解析器和配置，也可以逐文件调整。
+        </Typography.Text>
       </div>
       <Card>
         <Form form={form} layout="vertical">

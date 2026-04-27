@@ -137,6 +137,7 @@ export interface ParserStrategy {
   supported_file_exts: string[]
   capabilities: string[]
   config_schema: Record<string, unknown>
+  default_config: Record<string, unknown>
   source: string
   enabled: boolean
   loaded_at: string
@@ -214,4 +215,11 @@ export interface ParsedDocument {
 export interface ParseFileRunDetail {
   file_run: ParseFileRun
   parsed_document?: ParsedDocument | null
+}
+
+export interface ParseElementsPage {
+  items: Record<string, unknown>[]
+  total: number
+  offset: number
+  limit: number
 }

@@ -111,6 +111,7 @@ class ParserStrategyOut(BaseModel):
     supported_file_exts: list[str]
     capabilities: list[str]
     config_schema: dict
+    default_config: dict = Field(default_factory=dict)
     source: str
     enabled: bool
     loaded_at: datetime
@@ -205,3 +206,10 @@ class ParsedDocumentOut(BaseModel):
 class ParseFileRunDetailOut(BaseModel):
     file_run: ParseFileRunOut
     parsed_document: ParsedDocumentOut | None = None
+
+
+class ParseElementsPageOut(BaseModel):
+    items: list[dict]
+    total: int
+    offset: int
+    limit: int

@@ -117,7 +117,7 @@ function BuildWorkspace() {
   const selectedKey = location.pathname.includes('/parse-runs') ? '/build/parse-runs' : '/build/material-parse'
   const items: MenuProps['items'] = [
     { key: '/build/material-parse', icon: <FileTextOutlined />, label: <Link to="/build/material-parse">材料解析</Link> },
-    { key: '/build/parse-runs', icon: <BuildOutlined />, label: <Link to="/build/parse-runs">解析情况</Link> },
+    { key: '/build/parse-runs', icon: <BuildOutlined />, label: <Link to="/build/parse-runs">解析任务</Link> },
   ]
 
   return (

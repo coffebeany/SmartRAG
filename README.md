@@ -34,6 +34,17 @@ The parser registry follows AutoRAG parse naming where possible. It registers lo
 
 Heavy or API-backed parsers can be configured before they are executable. Their availability is shown in `配置 -> 材料管理 -> 解析工具`.
 
+Non-LLM parser dependency layers are declared as uv extras:
+
+```powershell
+cd backend
+uv sync --extra parsers-pdf           # pdfminer/pdfplumber/pymupdf/pypdf/pypdfium2
+uv sync --extra parsers-unstructured  # unstructured[pdf,md]
+uv sync --extra parsers-local         # all local non-LLM parser dependencies
+```
+
+These are not installed by default to keep the base backend small and deployable. The UI still shows them with `missing_dependency` or `adapter_only` status until dependencies and adapters are available.
+
 To try the workflow:
 
 ```powershell
@@ -44,3 +55,5 @@ uv run pytest -p no:cacheprovider
 ```
 
 Then start backend and frontend, create or upload a material batch, open `构建 -> 材料解析`, choose parsers per file, and submit. Progress appears under `构建 -> 解析情况` as completed/total files, with file-level previews after completion.
+
+In parse details, Elements are loaded through a paginated API so large documents can be inspected without freezing the UI. Elements are parser-level observations and do not represent final RAG chunks.

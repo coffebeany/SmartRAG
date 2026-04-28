@@ -1,18 +1,8 @@
-curl --request POST \
-  --url https://api.siliconflow.cn/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-pnhpkujcrppaznpdytjlbpdryeqroyvjnlrgqacaqbzbftiq" \
-  -d '{
-    "model": "Qwen/Qwen3.5-4B",
-    "messages": [
-      {"role": "system", "content": "你是一个有用的助手"}
-    ]
-  }'
+1、对于解析工具的状态，添加一个 i ，展示详细状态说明
 
+2、添加解析打分，取消默认打分，仅在点击后调用打分
 
-
-PS C:\Users\yk> curl.exe --request POST "https://api.siliconflow.cn/v1/chat/completions" --header "Content-Type: application/json" --header "Authorization: Bearer sk-pnhpkujcrppaznpdytjlbpdryeqroyvjnlrgqacaqbzbftiq" --data '{"model":"Qwen/Qwen3.5-4B","messages":[{"role":"system","content":"你是一个有用的助手"}]}'
-"Invalid token"
+3、批次解析历史，打分历史
 
 
 
@@ -20,23 +10,11 @@ PS C:\Users\yk> curl.exe --request POST "https://api.siliconflow.cn/v1/chat/comp
 
 
 
-curl.exe --request POST "https://api.siliconflow.cn/v1/chat/completions" --header "Content-Type: application/json" --header "Authorization: Bearer sk-pnhpkujcrppaznpdytjlbpdryeqroyvjnlrgqacaqbzbftiq" --data '{"model":"Qwen/Qwen3.5-4B","messages":[{"role":"system","content":"你是一个有用的助手"},{"role":"user","content":"你好，请介绍一下你自己"}]}'
+review项目代码，识别以下问题：
 
-sk-pnhpkujcrppaznpdytjlbpdryeqroyvjnlrgqacaqbzbftiq
+1、后端报错时前端是否有对应处理，能否展示用户友好的报错信息，信息界面是否合理
 
-
-
-curl.exe "https://api.siliconflow.cn/v1/models" `
-  --header "Authorization: Bearer sk-pnhpkujcrppaznpdytjlbp
+2、
 
 
-
-deepseek-ai/DeepSeek-V4-Flash
-
-
-
-curl.exe --request POST "https://api.siliconflow.cn/v1/chat/completions" `
-  --header "Content-Type: application/json" `
-  --header "Authorization: Bearer sk-pnhpkujcrppaznpdytjlbpdryeqroyvjnlrgqacaqbzbftiq" `
-  --data '{"model":"deepseek-ai/DeepSeek-V4-Flash","messages":[{"role":"user","content":"你好，请介绍一下你自己"}]}'
 

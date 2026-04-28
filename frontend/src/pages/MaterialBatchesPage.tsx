@@ -19,9 +19,9 @@ export default function MaterialBatchesPage() {
   const deleteBatch = useDeleteMaterialBatch()
   const canConfirmDelete = deleteText.trim() === 'delete'
 
-  const getErrorMessage = (error: unknown) => {
+  const getErrorMessage = (error: unknown, fallback = '操作失败，请稍后重试') => {
     if (error instanceof Error) return error.message
-    return '删除失败，请稍后重试'
+    return fallback
   }
 
   const columns: ColumnsType<MaterialBatch> = useMemo(
@@ -90,13 +90,17 @@ export default function MaterialBatchesPage() {
         <Form
           form={form}
           layout="vertical"
-          onFinish={(values) => createBatch.mutate(values, {
-            onSuccess: () => {
+          onFinish={async (values) => {
+            try {
+              await createBatch.mutateAsync(values)
               message.success('批次已创建')
               setOpen(false)
               form.resetFields()
-            },
-          })}
+            } catch (error) {
+              message.error(getErrorMessage(error, '批次创建失败，请稍后重试'))
+            }
+          }}
+          onFinishFailed={() => message.warning('请填写批次名称')}
         >
           <Form.Item name="batch_name" label="批次名称" rules={[{ required: true }]}>
             <Input />
@@ -116,19 +120,18 @@ export default function MaterialBatchesPage() {
         <Form
           form={editForm}
           layout="vertical"
-          onFinish={(values) => {
+          onFinish={async (values) => {
             if (!editingBatch) return
-            updateBatch.mutate(
-              { batchId: editingBatch.batch_id, payload: values },
-              {
-                onSuccess: () => {
-                  message.success('批次已更新')
-                  setEditingBatch(null)
-                  editForm.resetFields()
-                },
-              },
-            )
+            try {
+              await updateBatch.mutateAsync({ batchId: editingBatch.batch_id, payload: values })
+              message.success('批次已更新')
+              setEditingBatch(null)
+              editForm.resetFields()
+            } catch (error) {
+              message.error(getErrorMessage(error, '批次更新失败，请稍后重试'))
+            }
           }}
+          onFinishFailed={() => message.warning('请填写批次名称')}
         >
           <Form.Item name="batch_name" label="批次名称" rules={[{ required: true }]}>
             <Input />
@@ -158,7 +161,7 @@ export default function MaterialBatchesPage() {
             setDeletingBatch(null)
             setDeleteText('')
           } catch (error) {
-            message.error(getErrorMessage(error))
+            message.error(getErrorMessage(error, '删除失败，请稍后重试'))
           }
         }}
       >

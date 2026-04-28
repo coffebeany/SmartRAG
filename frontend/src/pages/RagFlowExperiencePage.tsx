@@ -93,6 +93,15 @@ export default function RagFlowExperiencePage() {
         </Card>
       )}
       {result && (
+        <Card title="最终回答">
+          {result.answer ? (
+            <Typography.Paragraph className="passageText">{result.answer}</Typography.Paragraph>
+          ) : (
+            <Typography.Text type="secondary">该流程未配置 Answer Generator。</Typography.Text>
+          )}
+        </Card>
+      )}
+      {result && (
         <Card title="最终 Passages">
           <Space direction="vertical" size={12} className="fullWidth">
             {(result.final_passages ?? []).map((passage, index) => (

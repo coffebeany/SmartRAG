@@ -134,6 +134,8 @@ class RagFlowRunOut(BaseModel):
     flow_id: str
     query: str
     status: str
+    answer: str | None = None
+    answer_metadata: dict = Field(default_factory=dict)
     final_passages: list[dict]
     trace_events: list[dict]
     latency_ms: int | None = None

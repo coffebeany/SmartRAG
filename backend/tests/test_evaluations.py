@@ -4,7 +4,14 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.schemas.evaluations import ParseEvaluationRunCreate
-from app.services.evaluations import create_parse_evaluation_run, list_parse_evaluators
+from app.services.evaluations import (
+    _merge_generator_config,
+    create_parse_evaluation_run,
+    list_evaluation_frameworks,
+    list_parse_evaluators,
+)
+from app.evaluators.adapters import _ragas_embeddings_for_model
+from app.evaluators.registry import evaluation_framework_registry
 
 
 @pytest.mark.asyncio
@@ -57,3 +64,46 @@ def test_parse_evaluation_run_api_returns_501() -> None:
     )
 
     assert response.status_code == 501
+
+
+@pytest.mark.asyncio
+async def test_evaluation_framework_registry_exposes_ragas() -> None:
+    frameworks = await list_evaluation_frameworks()
+    ragas = next(item for item in frameworks if item.framework_id == "ragas")
+
+    assert ragas.default_metrics == [
+        "context_precision",
+        "context_recall",
+        "faithfulness",
+        "answer_relevancy",
+    ]
+    assert {"testset_size", "advanced_config"}.issubset(ragas.generator_config_schema["properties"])
+    assert ragas.default_generator_config["language"] == "zh"
+    assert ragas.availability_status in {"available", "missing_dependency"}
+
+
+def test_generator_config_merges_defaults_and_advanced_config() -> None:
+    framework = evaluation_framework_registry.get("ragas")
+    assert framework is not None
+
+    merged = _merge_generator_config(
+        framework,
+        {
+            "testset_size": 20,
+            "query_distribution": {"single_hop_specific": 1.0},
+            "chunk_sampling": {"max_chunks": 30},
+            "advanced_config": {"transforms": ["headline"]},
+        },
+    )
+
+    assert merged["testset_size"] == 20
+    assert merged["query_distribution"]["single_hop_specific"] == 1.0
+    assert merged["query_distribution"]["multi_hop_specific"] == 0.2
+    assert merged["chunk_sampling"]["mode"] == "all_completed_chunks"
+    assert merged["chunk_sampling"]["max_chunks"] == 30
+    assert merged["advanced_config"] == {"transforms": ["headline"]}
+
+
+def test_ragas_embedding_adapter_requires_explicit_model() -> None:
+    with pytest.raises(RuntimeError, match="default_embedding_model"):
+        _ragas_embeddings_for_model(None)

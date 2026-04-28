@@ -38,6 +38,7 @@ def test_rag_component_registry_contains_autorag_modules() -> None:
     assert {"tree_summarize", "refine", "longllmlingua", "pass_compressor"}.issubset(
         by_node["passage_compressor"]
     )
+    assert {"llm_answer"}.issubset(by_node["answer_generator"])
 
 
 def test_rag_component_registry_exposes_form_schema_and_install_hints() -> None:
@@ -45,6 +46,7 @@ def test_rag_component_registry_exposes_form_schema_and_install_hints() -> None:
     cohere = rag_component_registry.get("passage_reranker", "cohere_reranker")
     flashrank = rag_component_registry.get("passage_reranker", "flashrank_reranker")
     tree_summarize = rag_component_registry.get("passage_compressor", "tree_summarize")
+    llm_answer = rag_component_registry.get("answer_generator", "llm_answer")
 
     assert hyde is not None
     assert hyde.default_config["max_output_tokens"] == 512
@@ -57,6 +59,9 @@ def test_rag_component_registry_exposes_form_schema_and_install_hints() -> None:
     assert flashrank.optional_dependency_extra == "rag-rerank-local"
     assert tree_summarize is not None
     assert tree_summarize.default_config["max_output_tokens"] == 1024
+    assert llm_answer is not None
+    assert llm_answer.requires_llm is True
+    assert llm_answer.default_config["max_output_tokens"] == 1024
     hybrid_rrf = rag_component_registry.get("retrieval", "hybrid_rrf")
     assert hybrid_rrf is not None
     assert {"bm25_top_k", "vectordb_top_k"}.issubset(hybrid_rrf.config_schema["properties"])

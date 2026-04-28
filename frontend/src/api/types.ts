@@ -308,12 +308,124 @@ export interface RagFlowRun {
   flow_id: string
   query: string
   status: string
+  answer?: string | null
+  answer_metadata: Record<string, unknown>
   final_passages: Record<string, unknown>[]
   trace_events: Record<string, unknown>[]
   latency_ms?: number | null
   error?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface EvaluationMetric {
+  metric_id: string
+  display_name: string
+  description: string
+  category: string
+  requires_answer: boolean
+  requires_ground_truth: boolean
+  requires_contexts: boolean
+}
+
+export interface EvaluationFramework {
+  framework_id: string
+  display_name: string
+  description: string
+  source: string
+  default_metrics: string[]
+  metrics: EvaluationMetric[]
+  generator_config_schema: Record<string, unknown>
+  default_generator_config: Record<string, unknown>
+  availability_status: string
+  availability_reason: string
+  dependency_install_hint?: string | null
+}
+
+export interface EvaluationDatasetRun {
+  run_id: string
+  batch_id: string
+  chunk_run_id: string
+  framework_id: string
+  generator_config: Record<string, unknown>
+  judge_llm_model_id?: string | null
+  embedding_model_id?: string | null
+  status: string
+  total_items: number
+  completed_items: number
+  failed_items: number
+  stats: Record<string, unknown>
+  error_summary?: string | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+  updated_at: string
+  batch_name?: string | null
+  chunk_status?: string | null
+}
+
+export interface EvaluationDatasetItem {
+  item_id: string
+  run_id: string
+  question: string
+  ground_truth: string
+  reference_contexts: string[]
+  source_chunk_ids: string[]
+  source_file_ids: string[]
+  synthesizer_name?: string | null
+  item_metadata: Record<string, unknown>
+  created_at: string
+}
+
+export interface EvaluationDatasetItemsPage {
+  items: EvaluationDatasetItem[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export interface EvaluationReportRun {
+  run_id: string
+  flow_id: string
+  dataset_run_id: string
+  framework_id: string
+  metric_ids: string[]
+  evaluator_config: Record<string, unknown>
+  aggregate_scores: Record<string, number>
+  status: string
+  total_items: number
+  completed_items: number
+  failed_items: number
+  error_summary?: string | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+  updated_at: string
+  flow_name?: string | null
+  dataset_status?: string | null
+}
+
+export interface EvaluationReportItem {
+  item_id: string
+  run_id: string
+  dataset_item_id: string
+  rag_flow_run_id?: string | null
+  question: string
+  answer?: string | null
+  contexts: string[]
+  retrieved_chunk_ids: string[]
+  scores: Record<string, number>
+  trace_events: Record<string, unknown>[]
+  latency_ms?: number | null
+  error?: string | null
+  created_at: string
+}
+
+export interface EvaluationReportItemsPage {
+  items: EvaluationReportItem[]
+  total: number
+  offset: number
+  limit: number
 }
 
 export interface ChunkStrategy {

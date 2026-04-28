@@ -414,3 +414,28 @@ for name, display, requires_llm, executable in [
             optional_dependency_extra="rag-compress" if name == "longllmlingua" else None,
         )
     )
+
+rag_component_registry.register(
+    RagComponentSpec(
+        node_type="answer_generator",
+        module_type="llm_answer",
+        display_name="LLM Answer",
+        description="Generate the final answer from retrieved passages.",
+        capabilities=("answer_generation", "llm", "ragas"),
+        config_schema=schema(
+            {
+                "model_id": {"type": "string", "title": "LLM 模型"},
+                "agent_id": {"type": "string", "title": "Agent Profile"},
+                "temperature": {"type": "number", "title": "Temperature", "minimum": 0, "maximum": 2},
+                "max_output_tokens": {"type": "integer", "title": "Max output tokens", "minimum": 64, "maximum": 32768},
+                "system_prompt": {"type": "string", "title": "System Prompt"},
+            }
+        ),
+        default_config={
+            "temperature": 0,
+            "max_output_tokens": 1024,
+            "system_prompt": "请仅基于给定上下文回答问题。若上下文不足，请明确说明无法从材料中确定。",
+        },
+        requires_llm=True,
+    )
+)

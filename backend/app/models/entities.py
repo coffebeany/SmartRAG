@@ -535,6 +535,8 @@ class RagFlowRun(Base):
     flow_id: Mapped[str] = mapped_column(ForeignKey("rag_flows.flow_id", ondelete="CASCADE"), index=True)
     query: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    answer: Mapped[str | None] = mapped_column(Text)
+    answer_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
     final_passages: Mapped[list[dict]] = mapped_column(JSON, default=list)
     trace_events: Mapped[list[dict]] = mapped_column(JSON, default=list)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
@@ -545,3 +547,119 @@ class RagFlowRun(Base):
     )
 
     flow: Mapped[RagFlow] = relationship()
+
+
+class EvaluationDatasetRun(Base):
+    __tablename__ = "evaluation_dataset_runs"
+
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    batch_id: Mapped[str] = mapped_column(
+        ForeignKey("material_batches.batch_id", ondelete="CASCADE"), index=True
+    )
+    chunk_run_id: Mapped[str] = mapped_column(ForeignKey("chunk_runs.run_id", ondelete="CASCADE"), index=True)
+    framework_id: Mapped[str] = mapped_column(String(80), index=True)
+    generator_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    judge_llm_model_id: Mapped[str | None] = mapped_column(
+        ForeignKey("model_connections.model_id", ondelete="SET NULL"), index=True
+    )
+    embedding_model_id: Mapped[str | None] = mapped_column(
+        ForeignKey("model_connections.model_id", ondelete="SET NULL"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    total_items: Mapped[int] = mapped_column(Integer, default=0)
+    completed_items: Mapped[int] = mapped_column(Integer, default=0)
+    failed_items: Mapped[int] = mapped_column(Integer, default=0)
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    error_summary: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    batch: Mapped[MaterialBatch] = relationship()
+    chunk_run: Mapped[ChunkRun] = relationship()
+    judge_llm_model: Mapped[ModelConnection | None] = relationship(foreign_keys=[judge_llm_model_id])
+    embedding_model: Mapped[ModelConnection | None] = relationship(foreign_keys=[embedding_model_id])
+    items: Mapped[list["EvaluationDatasetItem"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="EvaluationDatasetItem.created_at"
+    )
+
+
+class EvaluationDatasetItem(Base):
+    __tablename__ = "evaluation_dataset_items"
+
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("evaluation_dataset_runs.run_id", ondelete="CASCADE"), index=True
+    )
+    question: Mapped[str] = mapped_column(Text)
+    ground_truth: Mapped[str] = mapped_column(Text)
+    reference_contexts: Mapped[list[str]] = mapped_column(JSON, default=list)
+    source_chunk_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    source_file_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    synthesizer_name: Mapped[str | None] = mapped_column(String(160))
+    item_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[EvaluationDatasetRun] = relationship(back_populates="items")
+
+
+class EvaluationReportRun(Base):
+    __tablename__ = "evaluation_report_runs"
+
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    flow_id: Mapped[str] = mapped_column(ForeignKey("rag_flows.flow_id", ondelete="CASCADE"), index=True)
+    dataset_run_id: Mapped[str] = mapped_column(
+        ForeignKey("evaluation_dataset_runs.run_id", ondelete="CASCADE"), index=True
+    )
+    framework_id: Mapped[str] = mapped_column(String(80), index=True)
+    metric_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    evaluator_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    aggregate_scores: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    total_items: Mapped[int] = mapped_column(Integer, default=0)
+    completed_items: Mapped[int] = mapped_column(Integer, default=0)
+    failed_items: Mapped[int] = mapped_column(Integer, default=0)
+    error_summary: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    flow: Mapped[RagFlow] = relationship()
+    dataset_run: Mapped[EvaluationDatasetRun] = relationship()
+    items: Mapped[list["EvaluationReportItem"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="EvaluationReportItem.created_at"
+    )
+
+
+class EvaluationReportItem(Base):
+    __tablename__ = "evaluation_report_items"
+
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("evaluation_report_runs.run_id", ondelete="CASCADE"), index=True
+    )
+    dataset_item_id: Mapped[str] = mapped_column(
+        ForeignKey("evaluation_dataset_items.item_id", ondelete="CASCADE"), index=True
+    )
+    rag_flow_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("rag_flow_runs.run_id", ondelete="SET NULL"), index=True
+    )
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str | None] = mapped_column(Text)
+    contexts: Mapped[list[str]] = mapped_column(JSON, default=list)
+    retrieved_chunk_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    scores: Mapped[dict] = mapped_column(JSON, default=dict)
+    trace_events: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[EvaluationReportRun] = relationship(back_populates="items")
+    dataset_item: Mapped[EvaluationDatasetItem] = relationship()
+    rag_flow_run: Mapped[RagFlowRun | None] = relationship()

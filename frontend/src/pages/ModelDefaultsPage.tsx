@@ -12,6 +12,13 @@ const DEFAULT_KEYS = [
   'default_multimodal_model',
 ]
 
+function categoriesForDefault(key: string) {
+  if (key === 'default_embedding_model') return ['embedding']
+  if (key === 'default_reranker') return ['reranker']
+  if (key === 'default_multimodal_model') return ['multimodal', 'vision_embedding']
+  return ['llm', 'reasoning', 'moe', 'custom']
+}
+
 export default function ModelDefaultsPage() {
   const { message } = App.useApp()
   const [form] = Form.useForm()
@@ -39,7 +46,12 @@ export default function ModelDefaultsPage() {
         >
           {DEFAULT_KEYS.map(key => (
             <Form.Item key={key} name={key} label={key}>
-              <Select allowClear options={(models.data ?? []).map(item => ({ value: item.model_id, label: `${item.display_name} (${item.model_category})` }))} />
+              <Select
+                allowClear
+                options={(models.data ?? [])
+                  .filter(item => categoriesForDefault(key).includes(item.model_category))
+                  .map(item => ({ value: item.model_id, label: `${item.display_name} (${item.model_category})` }))}
+              />
             </Form.Item>
           ))}
           <Button type="primary" htmlType="submit" loading={updateDefaults.isPending}>保存默认模型</Button>
@@ -48,4 +60,3 @@ export default function ModelDefaultsPage() {
     </Space>
   )
 }
-

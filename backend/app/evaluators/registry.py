@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 from dataclasses import dataclass, field
 
 
@@ -49,11 +50,76 @@ class ParseEvaluatorRegistry:
         )
 
 
+@dataclass(frozen=True)
+class EvaluationFrameworkAvailability:
+    status: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class EvaluationMetricSpec:
+    metric_id: str
+    display_name: str
+    description: str
+    category: str
+    requires_answer: bool = True
+    requires_ground_truth: bool = True
+    requires_contexts: bool = True
+
+
+@dataclass(frozen=True)
+class EvaluationFrameworkSpec:
+    framework_id: str
+    display_name: str
+    description: str
+    source: str
+    default_metrics: tuple[str, ...]
+    metrics: tuple[EvaluationMetricSpec, ...]
+    generator_config_schema: dict = field(default_factory=dict)
+    default_generator_config: dict = field(default_factory=dict)
+    required_dependencies: tuple[str, ...] = ()
+    optional_dependency_extra: str | None = None
+    executable: bool = True
+
+    def availability(self) -> EvaluationFrameworkAvailability:
+        if not self.executable:
+            return EvaluationFrameworkAvailability("adapter_only", "Framework adapter is registered but not executable.")
+        missing = []
+        for dependency in self.required_dependencies:
+            try:
+                found = importlib.util.find_spec(dependency) is not None
+            except ModuleNotFoundError:
+                found = False
+            if not found:
+                missing.append(dependency)
+        if missing:
+            return EvaluationFrameworkAvailability(
+                "missing_dependency",
+                f"Missing Python dependencies: {', '.join(missing)}",
+            )
+        return EvaluationFrameworkAvailability("available", "Available")
+
+
+class EvaluationFrameworkRegistry:
+    def __init__(self) -> None:
+        self._frameworks: dict[str, EvaluationFrameworkSpec] = {}
+
+    def register(self, framework: EvaluationFrameworkSpec) -> None:
+        self._frameworks[framework.framework_id] = framework
+
+    def get(self, framework_id: str) -> EvaluationFrameworkSpec | None:
+        return self._frameworks.get(framework_id)
+
+    def list(self) -> list[EvaluationFrameworkSpec]:
+        return sorted(self._frameworks.values(), key=lambda framework: framework.display_name)
+
+
 def schema(properties: dict, required: list[str] | None = None) -> dict:
     return {"type": "object", "properties": properties, "required": required or []}
 
 
 parse_evaluator_registry = ParseEvaluatorRegistry()
+evaluation_framework_registry = EvaluationFrameworkRegistry()
 
 parse_evaluator_registry.register(
     ParseEvaluatorSpec(
@@ -82,6 +148,90 @@ parse_evaluator_registry.register(
         default_config={"group": "all", "test_mode": True},
         source="parsebench",
         executable=False,
+    )
+)
+
+evaluation_framework_registry.register(
+    EvaluationFrameworkSpec(
+        framework_id="ragas",
+        display_name="RAGAS",
+        description="RAGAS-compatible testset generation and RAG evaluation adapter.",
+        source="ragas",
+        default_metrics=("context_precision", "context_recall", "faithfulness", "answer_relevancy"),
+        metrics=(
+            EvaluationMetricSpec(
+                metric_id="context_precision",
+                display_name="Context Precision",
+                description="Measures whether retrieved contexts are relevant and ranked before irrelevant contexts.",
+                category="retrieval",
+            ),
+            EvaluationMetricSpec(
+                metric_id="context_recall",
+                display_name="Context Recall",
+                description="Measures whether retrieved contexts contain information needed by the reference answer.",
+                category="retrieval",
+            ),
+            EvaluationMetricSpec(
+                metric_id="faithfulness",
+                display_name="Faithfulness",
+                description="Measures factual consistency between the generated answer and retrieved contexts.",
+                category="generation",
+            ),
+            EvaluationMetricSpec(
+                metric_id="answer_relevancy",
+                display_name="Answer Relevancy",
+                description="Measures whether the generated answer addresses the question.",
+                category="generation",
+            ),
+        ),
+        generator_config_schema=schema(
+            {
+                "testset_size": {"type": "integer", "title": "Testset Size", "minimum": 1, "maximum": 500},
+                "language": {"type": "string", "title": "Language"},
+                "query_distribution": {
+                    "type": "object",
+                    "title": "Query Distribution",
+                    "properties": {
+                        "single_hop_specific": {"type": "number", "minimum": 0, "maximum": 1},
+                        "multi_hop_specific": {"type": "number", "minimum": 0, "maximum": 1},
+                        "multi_hop_abstract": {"type": "number", "minimum": 0, "maximum": 1},
+                    },
+                },
+                "chunk_sampling": {
+                    "type": "object",
+                    "title": "Chunk Sampling",
+                    "properties": {
+                        "mode": {
+                            "type": "string",
+                            "enum": ["all_completed_chunks", "by_file", "top_n"],
+                        },
+                        "max_chunks": {"type": "integer", "minimum": 1},
+                        "min_char_count": {"type": "integer", "minimum": 0},
+                        "max_char_count": {"type": "integer", "minimum": 1},
+                        "source_file_ids": {"type": "array", "items": {"type": "string"}},
+                    },
+                },
+                "persona": {"type": "string", "title": "Persona"},
+                "llm_context": {"type": "string", "title": "LLM Context"},
+                "random_seed": {"type": "integer", "title": "Random Seed"},
+                "advanced_config": {"type": "object", "title": "Advanced Config"},
+            }
+        ),
+        default_generator_config={
+            "testset_size": 10,
+            "language": "zh",
+            "query_distribution": {
+                "single_hop_specific": 0.7,
+                "multi_hop_specific": 0.2,
+                "multi_hop_abstract": 0.1,
+            },
+            "chunk_sampling": {"mode": "all_completed_chunks"},
+            "persona": "",
+            "llm_context": "",
+            "advanced_config": {},
+        },
+        required_dependencies=("ragas", "datasets"),
+        optional_dependency_extra="eval-ragas",
     )
 )
 

@@ -10,6 +10,11 @@ import type {
   ChunkRunCompare,
   ChunkStrategy,
   ComponentConfig,
+  EvaluationDatasetItemsPage,
+  EvaluationDatasetRun,
+  EvaluationFramework,
+  EvaluationReportItemsPage,
+  EvaluationReportRun,
   HealthCheckResult,
   MaterialBatch,
   MaterialBatchVersion,
@@ -599,5 +604,109 @@ export function useRunRagFlow() {
     mutationFn: ({ flowId, query }: { flowId: string; query: string }) =>
       apiClient.post<RagFlowRun>(`/rag-flows/${flowId}/run`, { query }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rag-flows'] }),
+  })
+}
+
+export function useEvaluationFrameworks() {
+  return useQuery({
+    queryKey: ['evaluation-frameworks'],
+    queryFn: () => apiClient.get<EvaluationFramework[]>('/evaluation-frameworks'),
+  })
+}
+
+export function useCreateEvaluationDatasetRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: unknown) => apiClient.post<EvaluationDatasetRun>('/evaluation-dataset-runs', payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['evaluation-dataset-runs'] }),
+  })
+}
+
+export function useEvaluationDatasetRuns() {
+  return useQuery({
+    queryKey: ['evaluation-dataset-runs'],
+    queryFn: () => apiClient.get<EvaluationDatasetRun[]>('/evaluation-dataset-runs'),
+    refetchInterval: (query) => {
+      const runs = query.state.data as EvaluationDatasetRun[] | undefined
+      return runs?.some((run) => ['pending', 'running'].includes(run.status)) ? 1500 : false
+    },
+  })
+}
+
+export function useEvaluationDatasetRun(runId?: string) {
+  return useQuery({
+    queryKey: ['evaluation-dataset-run', runId],
+    queryFn: () => apiClient.get<EvaluationDatasetRun>(`/evaluation-dataset-runs/${runId}`),
+    enabled: Boolean(runId),
+    refetchInterval: (query) => {
+      const run = query.state.data as EvaluationDatasetRun | undefined
+      return run && ['pending', 'running'].includes(run.status) ? 1500 : false
+    },
+  })
+}
+
+export function useDeleteEvaluationDatasetRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => apiClient.delete(`/evaluation-dataset-runs/${runId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evaluation-dataset-runs'] })
+      queryClient.invalidateQueries({ queryKey: ['evaluation-report-runs'] })
+    },
+  })
+}
+
+export function useEvaluationDatasetItems(runId?: string, offset = 0, limit = 50) {
+  return useQuery({
+    queryKey: ['evaluation-dataset-items', runId, offset, limit],
+    queryFn: () => apiClient.get<EvaluationDatasetItemsPage>(`/evaluation-dataset-runs/${runId}/items?offset=${offset}&limit=${limit}`),
+    enabled: Boolean(runId),
+  })
+}
+
+export function useCreateEvaluationReportRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: unknown) => apiClient.post<EvaluationReportRun>('/evaluation-report-runs', payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['evaluation-report-runs'] }),
+  })
+}
+
+export function useEvaluationReportRuns() {
+  return useQuery({
+    queryKey: ['evaluation-report-runs'],
+    queryFn: () => apiClient.get<EvaluationReportRun[]>('/evaluation-report-runs'),
+    refetchInterval: (query) => {
+      const runs = query.state.data as EvaluationReportRun[] | undefined
+      return runs?.some((run) => ['pending', 'running'].includes(run.status)) ? 1500 : false
+    },
+  })
+}
+
+export function useEvaluationReportRun(runId?: string) {
+  return useQuery({
+    queryKey: ['evaluation-report-run', runId],
+    queryFn: () => apiClient.get<EvaluationReportRun>(`/evaluation-report-runs/${runId}`),
+    enabled: Boolean(runId),
+    refetchInterval: (query) => {
+      const run = query.state.data as EvaluationReportRun | undefined
+      return run && ['pending', 'running'].includes(run.status) ? 1500 : false
+    },
+  })
+}
+
+export function useDeleteEvaluationReportRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => apiClient.delete(`/evaluation-report-runs/${runId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['evaluation-report-runs'] }),
+  })
+}
+
+export function useEvaluationReportItems(runId?: string, offset = 0, limit = 50) {
+  return useQuery({
+    queryKey: ['evaluation-report-items', runId, offset, limit],
+    queryFn: () => apiClient.get<EvaluationReportItemsPage>(`/evaluation-report-runs/${runId}/items?offset=${offset}&limit=${limit}`),
+    enabled: Boolean(runId),
   })
 }

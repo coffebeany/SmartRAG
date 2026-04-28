@@ -199,6 +199,10 @@ body {
   min-width: 220px;
 }
 
+.wideSelect {
+  min-width: 260px;
+}
+
 .flowGraph {
   display: flex;
   flex-wrap: wrap;

@@ -11,6 +11,7 @@ const NODE_TYPES = [
   { value: 'passage_reranker', label: 'Passage Rerank' },
   { value: 'passage_filter', label: 'Passage Filter' },
   { value: 'passage_compressor', label: 'Passage Compressor' },
+  { value: 'answer_generator', label: 'Answer Generator' },
 ]
 
 const DEFAULT_RETRIEVAL_NODE: RagFlowNode = {
@@ -236,7 +237,8 @@ export default function RagFlowBuilderPage() {
       nodes: [
         ...nodes.filter((node) => node.node_type === 'query_expansion'),
         retrievalNode,
-        ...nodes.filter((node) => node.node_type !== 'query_expansion'),
+        ...nodes.filter((node) => node.node_type !== 'query_expansion' && node.node_type !== 'answer_generator'),
+        ...nodes.filter((node) => node.node_type === 'answer_generator'),
       ],
       enabled: true,
     }

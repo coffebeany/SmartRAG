@@ -1028,6 +1028,48 @@ async def _compress(session: AsyncSession, query: str, passages: list[Passage], 
     )
 
 
+async def _answer(
+    session: AsyncSession,
+    query: str,
+    passages: list[Passage],
+    node: dict,
+    config: dict,
+) -> tuple[str, dict, dict]:
+    started = time.perf_counter()
+    module_type = node["module_type"]
+    if module_type != "llm_answer":
+        raise ValueError(f"{module_type} is registered but not executable in this runtime")
+    context = "\n\n".join(
+        f"[{index + 1}] {passage.contents[:4000]}"
+        for index, passage in enumerate(passages)
+    )
+    system_prompt = str(
+        config.get("system_prompt")
+        or "请仅基于给定上下文回答问题。若上下文不足，请明确说明无法从材料中确定。"
+    )
+    prompt = (
+        f"{system_prompt}\n\n"
+        f"问题：\n{query}\n\n"
+        f"上下文：\n{context or '无可用上下文'}\n\n"
+        "请输出最终答案。"
+    )
+    answer = await _run_prompt(session, config=config, prompt=prompt, query=query)
+    metadata = {
+        "context_count": len(passages),
+        "source_chunk_ids": [passage.chunk_id for passage in passages],
+        "model_id": config.get("model_id"),
+        "agent_id": config.get("agent_id"),
+    }
+    return answer, metadata, _trace(
+        node_type="answer_generator",
+        module_type=module_type,
+        started=started,
+        activated=True,
+        input_summary={"query": query, "context_count": len(passages)},
+        output_summary={"answer_chars": len(answer), "source_chunk_ids": metadata["source_chunk_ids"][:10]},
+    )
+
+
 async def _node_config(session: AsyncSession, node: dict) -> tuple[RagComponentSpec, dict, bool]:
     spec = _validate_component_known(node["node_type"], node["module_type"])
     component = await get_component_config(session, node["component_config_id"]) if node.get("component_config_id") else None
@@ -1074,7 +1116,7 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
         retrieval_node = dict(retrieval_node) | {"config": retrieval_config}
         passages, event = await _retrieve(session, vector_run, queries, retrieval_node)
         trace_events.append(event)
-        for node in [item for item in flow.nodes if item.get("enabled", True) and item.get("node_type") not in {"query_expansion", "retrieval"}]:
+        for node in [item for item in flow.nodes if item.get("enabled", True) and item.get("node_type") not in {"query_expansion", "retrieval", "answer_generator"}]:
             _, config, _ = await _node_config(session, node)
             node_type = node["node_type"]
             if node_type == "passage_augmenter":
@@ -1088,6 +1130,17 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
             else:
                 raise ValueError(f"Unsupported node type: {node_type}")
             trace_events.append(event)
+        answer_nodes = [
+            item
+            for item in flow.nodes
+            if item.get("enabled", True) and item.get("node_type") == "answer_generator"
+        ]
+        if answer_nodes:
+            _, config, _ = await _node_config(session, answer_nodes[-1])
+            answer, answer_metadata, event = await _answer(session, query, passages, answer_nodes[-1], config)
+            run.answer = answer
+            run.answer_metadata = answer_metadata
+            trace_events.append(event)
         run.status = "completed"
         run.final_passages = [passage.to_dict() for passage in passages]
         run.trace_events = trace_events
@@ -1095,6 +1148,8 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
         run.error = None
     except Exception as exc:
         run.status = "failed"
+        run.answer = None
+        run.answer_metadata = {}
         run.final_passages = []
         run.trace_events = trace_events
         run.latency_ms = int((time.perf_counter() - started) * 1000)

@@ -9,6 +9,8 @@ import type {
   MaterialFile,
   ModelConnection,
   ParseElementsPage,
+  ParseEvaluationRunCreate,
+  ParseEvaluator,
   ParseFileRun,
   ParseFileRunDetail,
   ParsePlan,
@@ -233,6 +235,19 @@ export function useRefreshParserStrategies() {
       queryClient.setQueryData(['parser-strategies'], data)
       queryClient.invalidateQueries({ queryKey: ['parse-plan'] })
     },
+  })
+}
+
+export function useParseEvaluators() {
+  return useQuery({
+    queryKey: ['parse-evaluators'],
+    queryFn: () => apiClient.get<ParseEvaluator[]>('/parse-evaluators'),
+  })
+}
+
+export function useCreateParseEvaluationRun() {
+  return useMutation({
+    mutationFn: (payload: ParseEvaluationRunCreate) => apiClient.post('/parse-evaluation-runs', payload),
   })
 }
 

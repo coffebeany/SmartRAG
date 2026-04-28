@@ -111,6 +111,17 @@ Elements are parser observations, not retrieval chunks. Their granularity depend
 
 Use the paginated elements endpoint for complete element inspection. The file detail endpoint is intended for summary metadata and text preview.
 
+Parse runs do not automatically score output quality. The `quality_score` field is kept for historical compatibility and future evaluator output, but new file runs leave it `null` and the UI renders it as `NA`.
+
+## Parse Evaluation Placeholders
+
+SmartRAG exposes evaluator discovery and run-creation placeholders for future parser quality adapters:
+
+- `GET /parse-evaluators`
+- `POST /parse-evaluation-runs`
+
+The current built-in evaluator entries are `parsebench` and `score_bench`. Both return `adapter_only` availability because no executable ParseBench or SCORE-Bench adapter is bundled yet. Creating an evaluation run currently returns `501 Not Implemented` and does not write database records. No ParseBench or SCORE-Bench dependencies are installed by default.
+
 ## Testing
 
 ```powershell

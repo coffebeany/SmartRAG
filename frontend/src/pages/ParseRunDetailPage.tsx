@@ -30,6 +30,10 @@ function elementPreview(element: Record<string, unknown>) {
   return JSON.stringify(element).slice(0, 240)
 }
 
+function qualityScoreText(value: number | null | undefined) {
+  return value ?? 'NA'
+}
+
 export default function ParseRunDetailPage() {
   const { runId } = useParams()
   const [selectedFileRunId, setSelectedFileRunId] = useState<string>()
@@ -68,7 +72,7 @@ export default function ParseRunDetailPage() {
     { title: '格式', dataIndex: 'file_ext', render: (value) => <Tag>{value}</Tag> },
     { title: '解析器', dataIndex: 'parser_name' },
     { title: '状态', dataIndex: 'status', render: (value) => <Tag>{value}</Tag> },
-    { title: '质量分', dataIndex: 'quality_score', render: (value) => value ?? '-' },
+    { title: '质量分', dataIndex: 'quality_score', render: (value) => qualityScoreText(value) },
     { title: '耗时', dataIndex: 'latency_ms', render: (value) => (value ? `${value} ms` : '-') },
     { title: '错误', dataIndex: 'error', ellipsis: true },
   ]
@@ -139,7 +143,9 @@ export default function ParseRunDetailPage() {
               <Descriptions.Item label="文件">{detail.data.file_run.original_filename}</Descriptions.Item>
               <Descriptions.Item label="解析器">{detail.data.file_run.parser_name}</Descriptions.Item>
               <Descriptions.Item label="状态">{detail.data.file_run.status}</Descriptions.Item>
-              <Descriptions.Item label="质量分">{detail.data.file_run.quality_score ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="质量分">
+                {qualityScoreText(detail.data.file_run.quality_score)}
+              </Descriptions.Item>
               <Descriptions.Item label="错误">{detail.data.file_run.error ?? '-'}</Descriptions.Item>
             </Descriptions>
             {detail.data.parsed_document ? (

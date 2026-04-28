@@ -150,6 +150,26 @@ export interface ParserStrategy {
   autorag_parse_method?: string | null
 }
 
+export interface ParseEvaluator {
+  evaluator_name: string
+  display_name: string
+  description: string
+  capabilities: string[]
+  config_schema: Record<string, unknown>
+  default_config: Record<string, unknown>
+  source: string
+  enabled: boolean
+  availability_status: string
+  availability_reason: string
+}
+
+export interface ParseEvaluationRunCreate {
+  batch_id: string
+  parse_run_id?: string | null
+  evaluator_name: string
+  evaluator_config: Record<string, unknown>
+}
+
 export interface ParsePlanFile {
   file: MaterialFile
   default_parser_name?: string | null

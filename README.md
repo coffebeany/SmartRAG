@@ -57,3 +57,5 @@ uv run pytest -p no:cacheprovider
 Then start backend and frontend, create or upload a material batch, open `构建 -> 材料解析`, choose parsers per file, and submit. Progress appears under `构建 -> 解析情况` as completed/total files, with file-level previews after completion.
 
 In parse details, Elements are loaded through a paginated API so large documents can be inspected without freezing the UI. Elements are parser-level observations and do not represent final RAG chunks.
+
+Parse runs no longer calculate an automatic quality score. The legacy `quality_score` field remains for compatibility and future evaluator output, but new parse results leave it empty and the UI shows `NA`. Parser quality evaluation is reserved behind placeholder evaluator APIs so ParseBench, SCORE-Bench, or other adapters can be connected later without changing the parse workflow.

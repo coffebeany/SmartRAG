@@ -240,17 +240,3 @@ def get_adapter(parser_name: str) -> ParserAdapter:
     if not adapter:
         raise RuntimeError(f"Parser {parser_name} is not executable in this MVP.")
     return adapter
-
-
-def calculate_quality(result: ParsedResult) -> int:
-    score = 0
-    char_count = len(result.text.strip())
-    if char_count:
-        score += 50
-    if char_count > 300:
-        score += 20
-    if result.elements:
-        score += 20
-    if result.metadata:
-        score += 10
-    return min(score, 100)

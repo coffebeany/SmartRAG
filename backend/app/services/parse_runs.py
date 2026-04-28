@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.entities import MaterialFile, ParseFileRun, ParsedDocument, ParseRun
 from app.models.entities import ProcessingDefaultRule
-from app.parsers.adapters import calculate_quality, get_adapter
+from app.parsers.adapters import ParsedResult, get_adapter
 from app.parsers.registry import parser_registry
 from app.schemas.materials import (
     MaterialBatchOut,
@@ -290,6 +290,43 @@ def _artifact_root() -> Path:
     return root
 
 
+def _parse_artifact_payload(result: ParsedResult) -> dict:
+    return {
+        "text_content": result.text,
+        "elements": result.elements,
+        "metadata": result.metadata,
+        "pages": result.pages,
+        "char_count": len(result.text),
+    }
+
+
+def _apply_parse_success(
+    file_run: ParseFileRun,
+    result: ParsedResult,
+    run_id: str,
+    latency_ms: int,
+    artifact_uri: str,
+) -> ParsedDocument:
+    file_run.status = "completed"
+    file_run.latency_ms = latency_ms
+    file_run.quality_score = None
+    file_run.error = None
+    file_run.output_artifact_uri = artifact_uri
+    file_run.ended_at = datetime.now(UTC)
+    return ParsedDocument(
+        run_id=run_id,
+        file_run_id=file_run.file_run_id,
+        file_id=file_run.file_id,
+        parser_name=file_run.parser_name,
+        text_content=result.text,
+        elements=result.elements,
+        document_metadata=result.metadata,
+        pages=result.pages,
+        char_count=len(result.text),
+        artifact_uri=artifact_uri,
+    )
+
+
 async def execute_parse_run(run_id: str) -> None:
     async with AsyncSessionLocal() as session:
         run = await get_parse_run_model(session, run_id)
@@ -327,40 +364,16 @@ async def execute_parse_run(run_id: str) -> None:
                 path = material_service.resolve_storage_path(current.file.storage_uri)
                 result = adapter.parse(path, current.parser_config or {})
                 latency_ms = int((time.perf_counter() - started) * 1000)
-                quality = calculate_quality(result)
                 artifact_dir = _artifact_root() / run_id
                 artifact_dir.mkdir(parents=True, exist_ok=True)
                 artifact_path = artifact_dir / f"{current.file_run_id}.json"
-                payload = {
-                    "text_content": result.text,
-                    "elements": result.elements,
-                    "metadata": result.metadata,
-                    "pages": result.pages,
-                    "char_count": len(result.text),
-                }
+                payload = _parse_artifact_payload(result)
                 artifact_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
                 try:
                     artifact_uri = str(artifact_path.relative_to(Path.cwd())).replace("\\", "/")
                 except ValueError:
                     artifact_uri = str(artifact_path).replace("\\", "/")
-                document = ParsedDocument(
-                    run_id=run_id,
-                    file_run_id=current.file_run_id,
-                    file_id=current.file_id,
-                    parser_name=current.parser_name,
-                    text_content=result.text,
-                    elements=result.elements,
-                    document_metadata=result.metadata,
-                    pages=result.pages,
-                    char_count=len(result.text),
-                    artifact_uri=artifact_uri,
-                )
-                current.status = "completed"
-                current.latency_ms = latency_ms
-                current.quality_score = quality
-                current.error = None
-                current.output_artifact_uri = artifact_uri
-                current.ended_at = datetime.now(UTC)
+                document = _apply_parse_success(current, result, run_id, latency_ms, artifact_uri)
                 session.add(document)
             except Exception as exc:
                 latency_ms = int((time.perf_counter() - started) * 1000)

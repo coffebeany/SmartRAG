@@ -3,6 +3,12 @@ import { apiClient } from './client'
 import type {
   AgentProfile,
   AgentTypeInfo,
+  ChunkFileRun,
+  ChunkPage,
+  ChunkPlan,
+  ChunkRun,
+  ChunkRunCompare,
+  ChunkStrategy,
   HealthCheckResult,
   MaterialBatch,
   MaterialBatchVersion,
@@ -332,5 +338,95 @@ export function useParseFileRunElements(
         `/parse-runs/${runId}/files/${fileRunId}/elements?offset=${offset}&limit=${limit}`,
       ),
     enabled: Boolean(runId && fileRunId),
+  })
+}
+
+export function useChunkStrategies() {
+  return useQuery({
+    queryKey: ['chunk-strategies'],
+    queryFn: () => apiClient.get<ChunkStrategy[]>('/chunk-strategies'),
+  })
+}
+
+export function useRefreshChunkStrategies() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiClient.post<ChunkStrategy[]>('/chunk-strategies/refresh'),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['chunk-strategies'], data)
+      queryClient.invalidateQueries({ queryKey: ['chunk-plan'] })
+    },
+  })
+}
+
+export function useChunkPlan(batchId?: string, parseRunId?: string) {
+  return useQuery({
+    queryKey: ['chunk-plan', batchId, parseRunId],
+    queryFn: () => apiClient.get<ChunkPlan>(`/material-batches/${batchId}/chunk-plan?parse_run_id=${parseRunId}`),
+    enabled: Boolean(batchId && parseRunId),
+  })
+}
+
+export function useCreateChunkRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: unknown) => apiClient.post<ChunkRun>('/chunk-runs', payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['chunk-runs'] }),
+  })
+}
+
+export function useChunkRuns() {
+  return useQuery({
+    queryKey: ['chunk-runs'],
+    queryFn: () => apiClient.get<ChunkRun[]>('/chunk-runs'),
+    refetchInterval: (query) => {
+      const runs = query.state.data as ChunkRun[] | undefined
+      return runs?.some((run) => ['pending', 'running'].includes(run.status)) ? 1500 : false
+    },
+  })
+}
+
+export function useDeleteChunkRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => apiClient.delete(`/chunk-runs/${runId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['chunk-runs'] }),
+  })
+}
+
+export function useChunkRun(runId?: string) {
+  return useQuery({
+    queryKey: ['chunk-run', runId],
+    queryFn: () => apiClient.get<ChunkRun>(`/chunk-runs/${runId}`),
+    enabled: Boolean(runId),
+    refetchInterval: (query) => {
+      const run = query.state.data as ChunkRun | undefined
+      return run && ['pending', 'running'].includes(run.status) ? 1500 : false
+    },
+  })
+}
+
+export function useChunkFileRuns(runId?: string) {
+  return useQuery({
+    queryKey: ['chunk-file-runs', runId],
+    queryFn: () => apiClient.get<ChunkFileRun[]>(`/chunk-runs/${runId}/files`),
+    enabled: Boolean(runId),
+    refetchInterval: 1500,
+  })
+}
+
+export function useChunkFileRunChunks(runId?: string, fileRunId?: string, offset = 0, limit = 50) {
+  return useQuery({
+    queryKey: ['chunk-file-run-chunks', runId, fileRunId, offset, limit],
+    queryFn: () => apiClient.get<ChunkPage>(`/chunk-runs/${runId}/files/${fileRunId}/chunks?offset=${offset}&limit=${limit}`),
+    enabled: Boolean(runId && fileRunId),
+  })
+}
+
+export function useChunkRunCompare(batchId?: string) {
+  return useQuery({
+    queryKey: ['chunk-run-compare', batchId],
+    queryFn: () => apiClient.get<ChunkRunCompare[]>(`/material-batches/${batchId}/chunk-runs/compare`),
+    enabled: Boolean(batchId),
   })
 }

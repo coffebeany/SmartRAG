@@ -20,3 +20,4 @@ review项目代码，识别以下问题：
 
 
 
+现在开发chunk任务功能，参考https://github.com/Marker-Inc-Korea/AutoRAG。1、你应该接入这个项目支持的所有chunk模块（应该都是来源于其他开源项目或包），注意chunk模块也应该采用策略模式，类似模块化，有统一的输入输出结构，对于不适配的输入输出使用adapter去适配，将统一的输出单独抽离，便于我后续调试 2、chunk工具管理参考解析工具管理，应该有可用状态查看 3、UI界面在chunk后应该可以提供用户查看chunk结果 4、chunk仍然以批次为单位，chunk 批次任务管理参考解析任务管理 5、chunk需要支持更加复杂的参数，比如是否overlap，overlap比例是多少，overlap的策略是什么，是否拼接metadata

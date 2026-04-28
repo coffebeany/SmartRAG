@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="change-me-to-a-long-random-string", min_length=8)
     material_storage_root: str = "storage/materials"
     parse_artifact_root: str = "storage/parsed"
+    chunk_artifact_root: str = "storage/chunks"
 
     @cached_property
     def cors_origins(self) -> list[str]:

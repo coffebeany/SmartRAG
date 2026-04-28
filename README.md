@@ -59,3 +59,9 @@ Then start backend and frontend, create or upload a material batch, open `构建
 In parse details, Elements are loaded through a paginated API so large documents can be inspected without freezing the UI. Elements are parser-level observations and do not represent final RAG chunks.
 
 Parse runs no longer calculate an automatic quality score. The legacy `quality_score` field remains for compatibility and future evaluator output, but new parse results leave it empty and the UI shows `NA`. Parser quality evaluation is reserved behind placeholder evaluator APIs so ParseBench, SCORE-Bench, or other adapters can be connected later without changing the parse workflow.
+
+## Chunk Workflow
+
+Chunk runs use a completed parse run as input. Open `构建 -> 材料分块`, choose a material batch, choose a completed parse run, select one chunk strategy, edit the JSON config, and submit. Progress appears under `构建 -> 分块任务`; completed runs expose file-level chunk previews and a batch-level comparison view under `构建 -> 分块对比`.
+
+SmartRAG registers AutoRAG-compatible chunk strategies from LangChain Chunk and LlamaIndex Chunk families. The backend stores normalized chunk rows in the database for paging and downstream retrieval, while writing JSON artifacts under `storage/chunks` for debugging and reproducibility.

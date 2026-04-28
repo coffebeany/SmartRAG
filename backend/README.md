@@ -122,6 +122,38 @@ SmartRAG exposes evaluator discovery and run-creation placeholders for future pa
 
 The current built-in evaluator entries are `parsebench` and `score_bench`. Both return `adapter_only` availability because no executable ParseBench or SCORE-Bench adapter is bundled yet. Creating an evaluation run currently returns `501 Not Implemented` and does not write database records. No ParseBench or SCORE-Bench dependencies are installed by default.
 
+## Chunk APIs
+
+Chunk tasks require a completed parse run and execute one chunk strategy per run. Main endpoints:
+
+- `GET /chunk-strategies`
+- `POST /chunk-strategies/refresh`
+- `GET /material-batches/{batch_id}/chunk-plan?parse_run_id=...`
+- `POST /chunk-runs`
+- `GET /chunk-runs`
+- `GET /chunk-runs/{run_id}`
+- `GET /chunk-runs/{run_id}/files`
+- `GET /chunk-runs/{run_id}/files/{file_run_id}/chunks?offset=0&limit=50`
+- `GET /material-batches/{batch_id}/chunk-runs/compare`
+
+Registered AutoRAG-compatible chunk strategies:
+
+- LangChain Chunk: `langchain_token`, `langchain_recursive_character`, `langchain_character`, `langchain_konlpy`
+- LlamaIndex Chunk: `llama_index_token`, `llama_index_sentence`, `llama_index_sentence_window`, `llama_index_semantic`, `llama_index_semantic_doubling`, `llama_index_simple`
+
+Chunk output is normalized to `contents`, `source_text`, character offsets, token count, metadata, source element refs, and strategy metadata. Rows are stored in the database for UI paging and future retrieval/indexing; JSON artifacts are written under `storage/chunks`.
+
+Optional dependency groups:
+
+```powershell
+uv sync --extra chunk-langchain
+uv sync --extra chunk-llama-index
+uv sync --extra chunk-korean
+uv sync --extra chunk-semantic
+```
+
+Semantic chunkers require `embedding_model_id` in `chunker_config`; SmartRAG does not silently choose a default embedding model.
+
 ## Testing
 
 ```powershell

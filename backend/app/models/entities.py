@@ -278,3 +278,99 @@ class ParsedDocument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     file_run: Mapped[ParseFileRun] = relationship(back_populates="parsed_document")
+    file: Mapped[MaterialFile] = relationship()
+
+
+class ChunkRun(Base):
+    __tablename__ = "chunk_runs"
+
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    batch_id: Mapped[str] = mapped_column(
+        ForeignKey("material_batches.batch_id", ondelete="CASCADE"), index=True
+    )
+    batch_version_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    parse_run_id: Mapped[str] = mapped_column(
+        ForeignKey("parse_runs.run_id", ondelete="CASCADE"), index=True
+    )
+    chunker_name: Mapped[str] = mapped_column(String(120), index=True)
+    chunker_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    total_files: Mapped[int] = mapped_column(Integer, default=0)
+    completed_files: Mapped[int] = mapped_column(Integer, default=0)
+    failed_files: Mapped[int] = mapped_column(Integer, default=0)
+    total_chunks: Mapped[int] = mapped_column(Integer, default=0)
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    artifact_uri: Mapped[str | None] = mapped_column(String(800))
+    error_summary: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    batch: Mapped[MaterialBatch] = relationship()
+    parse_run: Mapped[ParseRun] = relationship()
+    file_runs: Mapped[list["ChunkFileRun"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="ChunkFileRun.created_at"
+    )
+
+
+class ChunkFileRun(Base):
+    __tablename__ = "chunk_file_runs"
+
+    file_run_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("chunk_runs.run_id", ondelete="CASCADE"), index=True)
+    parsed_document_id: Mapped[str] = mapped_column(
+        ForeignKey("parsed_documents.parsed_document_id", ondelete="CASCADE"), index=True
+    )
+    source_file_id: Mapped[str] = mapped_column(
+        ForeignKey("material_files.file_id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(Text)
+    artifact_uri: Mapped[str | None] = mapped_column(String(800))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    run: Mapped[ChunkRun] = relationship(back_populates="file_runs")
+    parsed_document: Mapped[ParsedDocument] = relationship()
+    source_file: Mapped[MaterialFile] = relationship()
+    chunks: Mapped[list["Chunk"]] = relationship(
+        back_populates="file_run", cascade="all, delete-orphan", order_by="Chunk.chunk_index"
+    )
+
+
+class Chunk(Base):
+    __tablename__ = "chunks"
+
+    chunk_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("chunk_runs.run_id", ondelete="CASCADE"), index=True)
+    file_run_id: Mapped[str] = mapped_column(
+        ForeignKey("chunk_file_runs.file_run_id", ondelete="CASCADE"), index=True
+    )
+    parsed_document_id: Mapped[str] = mapped_column(
+        ForeignKey("parsed_documents.parsed_document_id", ondelete="CASCADE"), index=True
+    )
+    source_file_id: Mapped[str] = mapped_column(
+        ForeignKey("material_files.file_id", ondelete="CASCADE"), index=True
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, index=True)
+    contents: Mapped[str] = mapped_column(Text)
+    source_text: Mapped[str] = mapped_column(Text)
+    start_char: Mapped[int] = mapped_column(Integer)
+    end_char: Mapped[int] = mapped_column(Integer)
+    char_count: Mapped[int] = mapped_column(Integer, default=0)
+    token_count: Mapped[int] = mapped_column(Integer, default=0)
+    chunk_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    source_element_refs: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    strategy_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    file_run: Mapped[ChunkFileRun] = relationship(back_populates="chunks")

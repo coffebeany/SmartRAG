@@ -243,3 +243,121 @@ export interface ParseElementsPage {
   offset: number
   limit: number
 }
+
+export interface ChunkStrategy {
+  chunker_name: string
+  display_name: string
+  description: string
+  module_type: string
+  chunk_method: string
+  capabilities: string[]
+  config_schema: Record<string, unknown>
+  default_config: Record<string, unknown>
+  source: string
+  enabled: boolean
+  availability_status: string
+  availability_reason: string
+  required_dependencies: string[]
+  requires_embedding_model: boolean
+}
+
+export interface ChunkPlanFile {
+  parsed_document_id: string
+  file_id: string
+  original_filename?: string | null
+  parser_name: string
+  char_count: number
+  pages: number
+}
+
+export interface ChunkPlan {
+  batch: MaterialBatch
+  parse_run: ParseRun
+  files: ChunkPlanFile[]
+  chunk_options: ChunkStrategy[]
+}
+
+export interface ChunkRun {
+  run_id: string
+  batch_id: string
+  batch_version_id?: string | null
+  parse_run_id: string
+  chunker_name: string
+  chunker_config: Record<string, unknown>
+  status: string
+  total_files: number
+  completed_files: number
+  failed_files: number
+  total_chunks: number
+  stats: Record<string, unknown>
+  artifact_uri?: string | null
+  error_summary?: string | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+  updated_at: string
+  batch_name?: string | null
+  parse_status?: string | null
+}
+
+export interface ChunkFileRun {
+  file_run_id: string
+  run_id: string
+  parsed_document_id: string
+  source_file_id: string
+  status: string
+  chunk_count: number
+  latency_ms?: number | null
+  error?: string | null
+  artifact_uri?: string | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+  updated_at: string
+  original_filename?: string | null
+  parser_name?: string | null
+}
+
+export interface Chunk {
+  chunk_id: string
+  run_id: string
+  file_run_id: string
+  parsed_document_id: string
+  source_file_id: string
+  chunk_index: number
+  contents: string
+  source_text: string
+  start_char: number
+  end_char: number
+  char_count: number
+  token_count: number
+  chunk_metadata: Record<string, unknown>
+  source_element_refs: Record<string, unknown>[]
+  strategy_metadata: Record<string, unknown>
+  created_at: string
+}
+
+export interface ChunkPage {
+  items: Chunk[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export interface ChunkRunCompare {
+  run_id: string
+  batch_id: string
+  batch_name?: string | null
+  parse_run_id: string
+  chunker_name: string
+  status: string
+  total_files: number
+  completed_files: number
+  failed_files: number
+  total_chunks: number
+  stats: Record<string, unknown>
+  chunker_config: Record<string, unknown>
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+}

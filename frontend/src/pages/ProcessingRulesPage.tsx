@@ -1,15 +1,8 @@
 import { App, Button, Card, Form, Input, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useEffect } from 'react'
-import { useParserStrategies, useProcessingDefaultRules, useUpdateProcessingDefaultRules } from '../api/hooks'
+import { useChunkStrategies, useParserStrategies, useProcessingDefaultRules, useUpdateProcessingDefaultRules } from '../api/hooks'
 import type { ProcessingDefaultRule } from '../api/types'
-
-const CHUNKER_OPTIONS = [
-  { value: 'chunker.fixed_size', label: '固定长度 Chunk' },
-  { value: 'chunker.recursive', label: '递归文本分块' },
-  { value: 'chunker.section_aware', label: '标题/章节感知分块' },
-  { value: 'chunker.table_aware', label: '表格感知分块' },
-]
 
 const METADATA_OPTIONS = [
   { value: 'metadata.none', label: '不抽取 Metadata' },
@@ -22,6 +15,7 @@ export default function ProcessingRulesPage() {
   const [form] = Form.useForm()
   const rules = useProcessingDefaultRules()
   const parsers = useParserStrategies()
+  const chunkers = useChunkStrategies()
   const updateRules = useUpdateProcessingDefaultRules()
 
   useEffect(() => {
@@ -75,7 +69,14 @@ export default function ProcessingRulesPage() {
                         )
                       }}
                     </Form.Item>
-                    <Form.Item name={[field.name, 'chunker_plugin_id']} label="Chunker"><Select options={CHUNKER_OPTIONS} /></Form.Item>
+                    <Form.Item name={[field.name, 'chunker_plugin_id']} label="Chunker">
+                      <Select
+                        options={(chunkers.data ?? []).map((chunker) => ({
+                          value: chunker.chunker_name,
+                          label: chunker.display_name,
+                        }))}
+                      />
+                    </Form.Item>
                     <Form.Item name={[field.name, 'metadata_strategy_id']} label="Metadata"><Select options={METADATA_OPTIONS} /></Form.Item>
                     <Form.Item name={[field.name, 'enabled']} label="启用" valuePropName="checked"><Switch /></Form.Item>
                   </div>

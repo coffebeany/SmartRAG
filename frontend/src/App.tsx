@@ -11,8 +11,13 @@ import { Layout, Menu, Typography } from 'antd'
 import type { MenuProps } from 'antd'
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AgentProfilesPage from './pages/AgentProfilesPage'
+import ChunkComparePage from './pages/ChunkComparePage'
+import ChunkRunDetailPage from './pages/ChunkRunDetailPage'
+import ChunkRunsPage from './pages/ChunkRunsPage'
+import ChunkStrategiesPage from './pages/ChunkStrategiesPage'
 import MaterialBatchDetailPage from './pages/MaterialBatchDetailPage'
 import MaterialBatchesPage from './pages/MaterialBatchesPage'
+import MaterialChunkPage from './pages/MaterialChunkPage'
 import MaterialParsePage from './pages/MaterialParsePage'
 import ModelDefaultsPage from './pages/ModelDefaultsPage'
 import ModelsPage from './pages/ModelsPage'
@@ -35,6 +40,8 @@ function ConfigWorkspace() {
     ? '/config/embedding'
     : location.pathname.includes('/materials/rules')
       ? '/config/materials/rules'
+      : location.pathname.includes('/materials/chunkers')
+        ? '/config/materials/chunkers'
       : location.pathname.includes('/materials/parsers')
         ? '/config/materials/parsers'
         : location.pathname.includes('/materials')
@@ -61,6 +68,7 @@ function ConfigWorkspace() {
       children: [
         { key: '/config/materials/batches', icon: <FolderOpenOutlined />, label: <Link to="/config/materials/batches">批次管理</Link> },
         { key: '/config/materials/parsers', icon: <FileTextOutlined />, label: <Link to="/config/materials/parsers">解析工具</Link> },
+        { key: '/config/materials/chunkers', icon: <BuildOutlined />, label: <Link to="/config/materials/chunkers">分块工具</Link> },
       ],
     },
   ]
@@ -106,6 +114,7 @@ function ConfigWorkspace() {
           <Route path="materials/batches/:batchId" element={<MaterialBatchDetailPage />} />
           <Route path="materials/rules" element={<Navigate to="/settings/processing-rules" replace />} />
           <Route path="materials/parsers" element={<ParserStrategiesPage />} />
+          <Route path="materials/chunkers" element={<ChunkStrategiesPage />} />
         </Routes>
       </section>
     </div>
@@ -114,10 +123,21 @@ function ConfigWorkspace() {
 
 function BuildWorkspace() {
   const location = useLocation()
-  const selectedKey = location.pathname.includes('/parse-runs') ? '/build/parse-runs' : '/build/material-parse'
+  const selectedKey = location.pathname.includes('/chunk-compare')
+    ? '/build/chunk-compare'
+    : location.pathname.includes('/chunk-runs')
+      ? '/build/chunk-runs'
+      : location.pathname.includes('/material-chunk')
+        ? '/build/material-chunk'
+        : location.pathname.includes('/parse-runs')
+          ? '/build/parse-runs'
+          : '/build/material-parse'
   const items: MenuProps['items'] = [
     { key: '/build/material-parse', icon: <FileTextOutlined />, label: <Link to="/build/material-parse">材料解析</Link> },
     { key: '/build/parse-runs', icon: <BuildOutlined />, label: <Link to="/build/parse-runs">解析任务</Link> },
+    { key: '/build/material-chunk', icon: <FileTextOutlined />, label: <Link to="/build/material-chunk">材料分块</Link> },
+    { key: '/build/chunk-runs', icon: <BuildOutlined />, label: <Link to="/build/chunk-runs">分块任务</Link> },
+    { key: '/build/chunk-compare', icon: <DatabaseOutlined />, label: <Link to="/build/chunk-compare">分块对比</Link> },
   ]
 
   return (
@@ -132,6 +152,10 @@ function BuildWorkspace() {
           <Route path="material-parse" element={<MaterialParsePage />} />
           <Route path="parse-runs" element={<ParseRunsPage />} />
           <Route path="parse-runs/:runId" element={<ParseRunDetailPage />} />
+          <Route path="material-chunk" element={<MaterialChunkPage />} />
+          <Route path="chunk-runs" element={<ChunkRunsPage />} />
+          <Route path="chunk-runs/:runId" element={<ChunkRunDetailPage />} />
+          <Route path="chunk-compare" element={<ChunkComparePage />} />
         </Routes>
       </section>
     </div>

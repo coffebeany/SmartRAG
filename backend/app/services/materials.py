@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.chunkers import chunker_registry
 from app.core.config import settings
 from app.models.entities import (
     MaterialBatch,
@@ -366,7 +367,7 @@ async def _ensure_processing_rules(session: AsyncSession) -> None:
                 file_ext=ext,
                 parser_name=default_parser.parser_name,
                 parser_config_yaml=None,
-                chunker_plugin_id="chunker.section_aware",
+                chunker_plugin_id="llama_index_sentence",
                 metadata_strategy_id="metadata.basic",
                 enabled=True,
             )
@@ -399,6 +400,11 @@ async def update_processing_rules(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Parser {incoming.parser_name} does not support {normalized_ext}",
+            )
+        if incoming.chunker_plugin_id and not chunker_registry.get(incoming.chunker_plugin_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown chunker: {incoming.chunker_plugin_id}",
             )
         existing = None
         if incoming.rule_id:

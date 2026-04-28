@@ -37,6 +37,18 @@ parsers-local = [
   "pypdfium2>=4.30.0,<5.0.0",
   "unstructured[pdf,md]>=0.16.0,<1.0.0"
 ]
+chunk-langchain = [
+  "langchain-text-splitters>=0.3.0,<1.0.0"
+]
+chunk-llama-index = [
+  "llama-index-core>=0.12.0,<1.0.0"
+]
+chunk-korean = [
+  "konlpy>=0.6.0,<1.0.0"
+]
+chunk-semantic = [
+  "llama-index-core>=0.12.0,<1.0.0"
+]
 
 [dependency-groups]
 dev = [

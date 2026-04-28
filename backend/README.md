@@ -1,6 +1,6 @@
 # SmartRAG Backend
 
-FastAPI backend for SmartRAG model configuration, material management, parser registry, and material parse runs.
+FastAPI backend for SmartRAG model configuration, material management, parser/chunk/vector registries, and batch processing runs.
 
 ## Local setup
 
@@ -153,6 +153,65 @@ uv sync --extra chunk-semantic
 ```
 
 Semantic chunkers require `embedding_model_id` in `chunker_config`; SmartRAG does not silently choose a default embedding model.
+
+## VectorDB APIs
+
+Vector tasks require a completed chunk run and execute one VectorDB backend per run. Main endpoints:
+
+- `GET /vectordbs`
+- `POST /vectordbs/refresh`
+- `GET /material-batches/{batch_id}/vector-plan?chunk_run_id=...`
+- `POST /vector-runs`
+- `GET /vector-runs`
+- `GET /vector-runs/{run_id}`
+- `DELETE /vector-runs/{run_id}`
+- `GET /vector-runs/{run_id}/files`
+- `GET /material-batches/{batch_id}/vector-runs/compare`
+
+The create payload records the complete strategy:
+
+```json
+{
+  "batch_id": "batch-id",
+  "chunk_run_id": "chunk-run-id",
+  "embedding_model_id": "embedding-model-id",
+  "vectordb_name": "chroma",
+  "vectordb_config": {
+    "path": "storage/vectors/chroma",
+    "similarity_metric": "cosine"
+  },
+  "embedding_config": {
+    "normalize_embeddings": false,
+    "embedding_batch": 100
+  },
+  "index_config": {
+    "similarity_metric": "cosine",
+    "metadata_mode": "full"
+  },
+  "file_selection": {
+    "mode": "selected",
+    "selected_file_ids": ["file-id"]
+  }
+}
+```
+
+Registered VectorDB modules:
+
+- `chroma`: default executable backend; persistent local storage under `storage/vectors/chroma`.
+- `qdrant`: executable adapter when `vector-qdrant` dependencies and local/remote config are available.
+- `pgvector`: executable adapter against the configured Postgres database when the `vector` extension is available.
+- `milvus`, `weaviate`, `pinecone`, `couchbase`: AutoRAG-compatible registry placeholders shown as `adapter_only` until executable adapters are added.
+
+Vector run metadata stays in Postgres: model snapshots, VectorDB config, embedding/index strategy, file progress, events, and chunk-to-vector mappings. Vector bodies are stored in the selected VectorDB collection. Deleting a vector run first deletes the external collection and then removes Postgres metadata.
+
+Optional dependency groups:
+
+```powershell
+uv sync --extra vector-qdrant
+uv sync --extra vector-pgvector
+```
+
+`test_related` file selection is reserved for the future test-set generator. It is present in the API schema but currently returns `501 Not Implemented` without database side effects.
 
 ## Testing
 

@@ -9,6 +9,7 @@ dependencies = [
   "asyncpg>=0.29.0,<1.0.0",
   "cryptography>=43.0.0,<44.0.0",
   "fastapi>=0.115.0,<1.0.0",
+  "chromadb>=0.5.0,<1.0.0",
   "httpx>=0.27.0,<1.0.0",
   "pydantic>=2.8.0,<3.0.0",
   "pydantic-settings>=2.4.0,<3.0.0",
@@ -48,6 +49,34 @@ chunk-korean = [
 ]
 chunk-semantic = [
   "llama-index-core>=0.12.0,<1.0.0"
+]
+vector-qdrant = [
+  "qdrant-client>=1.12.0,<2.0.0"
+]
+vector-pgvector = [
+  "pgvector>=0.3.0,<1.0.0"
+]
+rag-rerank-local = [
+  "flashrank>=0.2.10,<1.0.0",
+  "sentence-transformers>=3.0.0,<6.0.0",
+  "transformers>=4.44.0,<5.0.0"
+]
+rag-rerank-flag = [
+  "FlagEmbedding>=1.2.10,<2.0.0"
+]
+rag-rerank-openvino = [
+  "openvino>=2024.0.0,<2027.0.0"
+]
+rag-compress = [
+  "llmlingua>=0.2.2,<1.0.0"
+]
+rag-all = [
+  "flashrank>=0.2.10,<1.0.0",
+  "sentence-transformers>=3.0.0,<6.0.0",
+  "transformers>=4.44.0,<5.0.0",
+  "FlagEmbedding>=1.2.10,<2.0.0",
+  "openvino>=2024.0.0,<2027.0.0",
+  "llmlingua>=0.2.2,<1.0.0"
 ]
 
 [dependency-groups]

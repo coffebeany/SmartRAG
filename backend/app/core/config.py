@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     material_storage_root: str = "storage/materials"
     parse_artifact_root: str = "storage/parsed"
     chunk_artifact_root: str = "storage/chunks"
+    vector_storage_root: str = "storage/vectors"
 
     @cached_property
     def cors_origins(self) -> list[str]:

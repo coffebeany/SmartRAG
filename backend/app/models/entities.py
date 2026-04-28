@@ -374,3 +374,174 @@ class Chunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     file_run: Mapped[ChunkFileRun] = relationship(back_populates="chunks")
+    source_file: Mapped[MaterialFile] = relationship()
+
+
+class VectorRun(Base):
+    __tablename__ = "vector_runs"
+
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    batch_id: Mapped[str] = mapped_column(
+        ForeignKey("material_batches.batch_id", ondelete="CASCADE"), index=True
+    )
+    batch_version_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    chunk_run_id: Mapped[str] = mapped_column(
+        ForeignKey("chunk_runs.run_id", ondelete="CASCADE"), index=True
+    )
+    embedding_model_id: Mapped[str] = mapped_column(
+        ForeignKey("model_connections.model_id", ondelete="RESTRICT"), index=True
+    )
+    embedding_model_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    vectordb_name: Mapped[str] = mapped_column(String(120), index=True)
+    vectordb_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    embedding_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    index_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    file_selection: Mapped[dict] = mapped_column(JSON, default=dict)
+    collection_name: Mapped[str] = mapped_column(String(180), index=True)
+    storage_uri: Mapped[str] = mapped_column(String(800))
+    similarity_metric: Mapped[str] = mapped_column(String(40), default="cosine")
+    embedding_dimension: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    total_files: Mapped[int] = mapped_column(Integer, default=0)
+    completed_files: Mapped[int] = mapped_column(Integer, default=0)
+    failed_files: Mapped[int] = mapped_column(Integer, default=0)
+    total_chunks: Mapped[int] = mapped_column(Integer, default=0)
+    total_vectors: Mapped[int] = mapped_column(Integer, default=0)
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    error_summary: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    batch: Mapped[MaterialBatch] = relationship()
+    chunk_run: Mapped[ChunkRun] = relationship()
+    embedding_model: Mapped[ModelConnection] = relationship()
+    file_runs: Mapped[list["VectorFileRun"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="VectorFileRun.created_at"
+    )
+    items: Mapped[list["VectorItem"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    events: Mapped[list["VectorRunEvent"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+
+
+class VectorFileRun(Base):
+    __tablename__ = "vector_file_runs"
+
+    file_run_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("vector_runs.run_id", ondelete="CASCADE"), index=True)
+    chunk_file_run_id: Mapped[str] = mapped_column(
+        ForeignKey("chunk_file_runs.file_run_id", ondelete="CASCADE"), index=True
+    )
+    source_file_id: Mapped[str] = mapped_column(
+        ForeignKey("material_files.file_id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    vector_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_vectors: Mapped[int] = mapped_column(Integer, default=0)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    run: Mapped[VectorRun] = relationship(back_populates="file_runs")
+    chunk_file_run: Mapped[ChunkFileRun] = relationship()
+    source_file: Mapped[MaterialFile] = relationship()
+
+
+class VectorItem(Base):
+    __tablename__ = "vector_items"
+
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("vector_runs.run_id", ondelete="CASCADE"), index=True)
+    file_run_id: Mapped[str] = mapped_column(
+        ForeignKey("vector_file_runs.file_run_id", ondelete="CASCADE"), index=True
+    )
+    chunk_id: Mapped[str] = mapped_column(ForeignKey("chunks.chunk_id", ondelete="CASCADE"), index=True)
+    source_file_id: Mapped[str] = mapped_column(
+        ForeignKey("material_files.file_id", ondelete="CASCADE"), index=True
+    )
+    vector_id: Mapped[str] = mapped_column(String(220), index=True)
+    content_hash: Mapped[str] = mapped_column(String(64), index=True)
+    embedding_dimension: Mapped[int] = mapped_column(Integer)
+    item_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(30), default="stored", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[VectorRun] = relationship(back_populates="items")
+    file_run: Mapped[VectorFileRun] = relationship()
+    chunk: Mapped[Chunk] = relationship()
+    source_file: Mapped[MaterialFile] = relationship()
+
+
+class VectorRunEvent(Base):
+    __tablename__ = "vector_run_events"
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("vector_runs.run_id", ondelete="CASCADE"), index=True)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="info", index=True)
+    message: Mapped[str | None] = mapped_column(Text)
+    event_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[VectorRun] = relationship(back_populates="events")
+
+
+class ComponentConfig(Base):
+    __tablename__ = "component_configs"
+
+    config_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    node_type: Mapped[str] = mapped_column(String(80), index=True)
+    module_type: Mapped[str] = mapped_column(String(120), index=True)
+    display_name: Mapped[str] = mapped_column(String(160), index=True)
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
+    secret_config_encrypted: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RagFlow(Base):
+    __tablename__ = "rag_flows"
+
+    flow_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    flow_name: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    vector_run_id: Mapped[str] = mapped_column(ForeignKey("vector_runs.run_id", ondelete="RESTRICT"), index=True)
+    retrieval_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    nodes: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    vector_run: Mapped[VectorRun] = relationship()
+
+
+class RagFlowRun(Base):
+    __tablename__ = "rag_flow_runs"
+
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    flow_id: Mapped[str] = mapped_column(ForeignKey("rag_flows.flow_id", ondelete="CASCADE"), index=True)
+    query: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    final_passages: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    trace_events: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    flow: Mapped[RagFlow] = relationship()

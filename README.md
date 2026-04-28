@@ -2,7 +2,7 @@
 
 SmartRAG is a visual RAG strategy experimentation platform. This repository currently contains:
 
-- `backend`: FastAPI backend for model registry, Agent dry-runs, material batches, parser registry, and parse runs.
+- `backend`: FastAPI backend for model registry, Agent dry-runs, material batches, parser/chunk/vector registries, and processing runs.
 - `frontend`: React + Vite + Ant Design web console for configuration and build workflows.
 - `SmartRAG_Design.md`: product and architecture design notes.
 
@@ -65,3 +65,11 @@ Parse runs no longer calculate an automatic quality score. The legacy `quality_s
 Chunk runs use a completed parse run as input. Open `构建 -> 材料分块`, choose a material batch, choose a completed parse run, select one chunk strategy, edit the JSON config, and submit. Progress appears under `构建 -> 分块任务`; completed runs expose file-level chunk previews and a batch-level comparison view under `构建 -> 分块对比`.
 
 SmartRAG registers AutoRAG-compatible chunk strategies from LangChain Chunk and LlamaIndex Chunk families. The backend stores normalized chunk rows in the database for paging and downstream retrieval, while writing JSON artifacts under `storage/chunks` for debugging and reproducibility.
+
+## Vector Workflow
+
+Vector runs use a completed chunk run as input. Open `构建 -> 材料向量化`, choose a material batch, choose a completed chunk run, select an enabled Embedded model, select a VectorDB backend, tune the JSON strategy options, choose participating files, and submit. Progress appears under `构建 -> 向量化任务`.
+
+The default VectorDB is Chroma persistent storage under `storage/vectors/chroma`. SmartRAG stores vector run metadata, model snapshots, strategy configs, file progress, and chunk-to-vector mappings in Postgres. The vector bodies are written to the selected VectorDB collection. Deleting a vector run synchronously deletes its external collection.
+
+VectorDB strategy metadata is schema-driven and recorded with each run, including similarity metric, embedding batch size, normalization, payload metadata mode, and adapter-specific index options. The `仅测试集相关` file-selection mode is reserved for the future test-set workflow and is currently disabled in the UI.

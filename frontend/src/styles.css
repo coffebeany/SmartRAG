@@ -195,6 +195,52 @@ body {
   white-space: pre-wrap;
 }
 
+.nodeSelect {
+  min-width: 220px;
+}
+
+.flowGraph {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.flowNode {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  padding: 12px;
+  border: 1px solid rgba(29, 29, 31, 0.1);
+  border-radius: 8px;
+  background: #fbfaf6;
+}
+
+.flowNode:not(:last-child)::after {
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  color: #8a8478;
+  content: ">";
+  transform: translateY(-50%);
+}
+
+.flowNode.retrieval {
+  background: #ede9df;
+}
+
+.flowNode span {
+  overflow-wrap: anywhere;
+  color: #6b665e;
+  font-size: 12px;
+}
+
+.passageText {
+  margin-bottom: 0 !important;
+  white-space: pre-wrap;
+}
+
 .ant-card {
   border-radius: 8px;
   border-color: rgba(29, 29, 31, 0.08);

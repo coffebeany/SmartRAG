@@ -4,6 +4,7 @@ import {
   DatabaseOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
+  NodeIndexOutlined,
   RobotOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
@@ -15,16 +16,24 @@ import ChunkComparePage from './pages/ChunkComparePage'
 import ChunkRunDetailPage from './pages/ChunkRunDetailPage'
 import ChunkRunsPage from './pages/ChunkRunsPage'
 import ChunkStrategiesPage from './pages/ChunkStrategiesPage'
+import ComponentConfigsPage from './pages/ComponentConfigsPage'
 import MaterialBatchDetailPage from './pages/MaterialBatchDetailPage'
 import MaterialBatchesPage from './pages/MaterialBatchesPage'
 import MaterialChunkPage from './pages/MaterialChunkPage'
 import MaterialParsePage from './pages/MaterialParsePage'
+import MaterialVectorPage from './pages/MaterialVectorPage'
 import ModelDefaultsPage from './pages/ModelDefaultsPage'
 import ModelsPage from './pages/ModelsPage'
 import ParserStrategiesPage from './pages/ParserStrategiesPage'
 import ParseRunDetailPage from './pages/ParseRunDetailPage'
 import ParseRunsPage from './pages/ParseRunsPage'
 import ProcessingRulesPage from './pages/ProcessingRulesPage'
+import RagFlowBuilderPage from './pages/RagFlowBuilderPage'
+import RagFlowExperiencePage from './pages/RagFlowExperiencePage'
+import RagFlowsPage from './pages/RagFlowsPage'
+import VectorDBsPage from './pages/VectorDBsPage'
+import VectorRunDetailPage from './pages/VectorRunDetailPage'
+import VectorRunsPage from './pages/VectorRunsPage'
 
 const { Header, Content } = Layout
 
@@ -38,17 +47,19 @@ function ConfigWorkspace() {
   const location = useLocation()
   const selectedKey = location.pathname.includes('/embedding')
     ? '/config/embedding'
-    : location.pathname.includes('/materials/rules')
-      ? '/config/materials/rules'
-      : location.pathname.includes('/materials/chunkers')
-        ? '/config/materials/chunkers'
-      : location.pathname.includes('/materials/parsers')
-        ? '/config/materials/parsers'
-        : location.pathname.includes('/materials')
-          ? '/config/materials/batches'
-    : location.pathname.includes('/agent')
-      ? '/config/agent'
-      : '/config/llm'
+    : location.pathname.includes('/vectorization/vectordbs')
+      ? '/config/vectorization/vectordbs'
+      : location.pathname.includes('/materials/rules')
+        ? '/config/materials/rules'
+        : location.pathname.includes('/materials/chunkers')
+          ? '/config/materials/chunkers'
+          : location.pathname.includes('/materials/parsers')
+            ? '/config/materials/parsers'
+            : location.pathname.includes('/materials')
+              ? '/config/materials/batches'
+              : location.pathname.includes('/agent')
+                ? '/config/agent'
+                : '/config/llm'
 
   const items: MenuProps['items'] = [
     {
@@ -71,6 +82,14 @@ function ConfigWorkspace() {
         { key: '/config/materials/chunkers', icon: <BuildOutlined />, label: <Link to="/config/materials/chunkers">分块工具</Link> },
       ],
     },
+    {
+      key: 'vector-root',
+      icon: <DatabaseOutlined />,
+      label: '向量化',
+      children: [
+        { key: '/config/vectorization/vectordbs', icon: <DatabaseOutlined />, label: <Link to="/config/vectorization/vectordbs">VectorDB</Link> },
+      ],
+    },
   ]
 
   return (
@@ -81,7 +100,7 @@ function ConfigWorkspace() {
           className="configMenu"
           mode="inline"
           selectedKeys={[selectedKey]}
-          defaultOpenKeys={['agent-root', 'material-root']}
+          defaultOpenKeys={['agent-root', 'material-root', 'vector-root']}
           items={items}
         />
       </aside>
@@ -115,6 +134,8 @@ function ConfigWorkspace() {
           <Route path="materials/rules" element={<Navigate to="/settings/processing-rules" replace />} />
           <Route path="materials/parsers" element={<ParserStrategiesPage />} />
           <Route path="materials/chunkers" element={<ChunkStrategiesPage />} />
+          <Route path="vectorization" element={<Navigate to="/config/vectorization/vectordbs" replace />} />
+          <Route path="vectorization/vectordbs" element={<VectorDBsPage />} />
         </Routes>
       </section>
     </div>
@@ -125,19 +146,34 @@ function BuildWorkspace() {
   const location = useLocation()
   const selectedKey = location.pathname.includes('/chunk-compare')
     ? '/build/chunk-compare'
-    : location.pathname.includes('/chunk-runs')
-      ? '/build/chunk-runs'
-      : location.pathname.includes('/material-chunk')
-        ? '/build/material-chunk'
-        : location.pathname.includes('/parse-runs')
-          ? '/build/parse-runs'
-          : '/build/material-parse'
+    : location.pathname.includes('/rag-experience')
+      ? '/build/rag-experience'
+      : location.pathname.includes('/rag-flows')
+        ? '/build/rag-flows'
+        : location.pathname.includes('/rag-flow-builder')
+          ? '/build/rag-flow-builder'
+          : location.pathname.includes('/vector-runs')
+            ? '/build/vector-runs'
+            : location.pathname.includes('/material-vector')
+              ? '/build/material-vector'
+              : location.pathname.includes('/chunk-runs')
+                ? '/build/chunk-runs'
+                : location.pathname.includes('/material-chunk')
+                  ? '/build/material-chunk'
+                  : location.pathname.includes('/parse-runs')
+                    ? '/build/parse-runs'
+                    : '/build/material-parse'
   const items: MenuProps['items'] = [
     { key: '/build/material-parse', icon: <FileTextOutlined />, label: <Link to="/build/material-parse">材料解析</Link> },
     { key: '/build/parse-runs', icon: <BuildOutlined />, label: <Link to="/build/parse-runs">解析任务</Link> },
     { key: '/build/material-chunk', icon: <FileTextOutlined />, label: <Link to="/build/material-chunk">材料分块</Link> },
     { key: '/build/chunk-runs', icon: <BuildOutlined />, label: <Link to="/build/chunk-runs">分块任务</Link> },
     { key: '/build/chunk-compare', icon: <DatabaseOutlined />, label: <Link to="/build/chunk-compare">分块对比</Link> },
+    { key: '/build/material-vector', icon: <DatabaseOutlined />, label: <Link to="/build/material-vector">材料向量化</Link> },
+    { key: '/build/vector-runs', icon: <BuildOutlined />, label: <Link to="/build/vector-runs">向量化任务</Link> },
+    { key: '/build/rag-flow-builder', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flow-builder">流程构建</Link> },
+    { key: '/build/rag-flows', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flows">流程列表</Link> },
+    { key: '/build/rag-experience', icon: <RobotOutlined />, label: <Link to="/build/rag-experience">流程体验</Link> },
   ]
 
   return (
@@ -156,6 +192,13 @@ function BuildWorkspace() {
           <Route path="chunk-runs" element={<ChunkRunsPage />} />
           <Route path="chunk-runs/:runId" element={<ChunkRunDetailPage />} />
           <Route path="chunk-compare" element={<ChunkComparePage />} />
+          <Route path="material-vector" element={<MaterialVectorPage />} />
+          <Route path="vector-runs" element={<VectorRunsPage />} />
+          <Route path="vector-runs/:runId" element={<VectorRunDetailPage />} />
+          <Route path="rag-flow-builder" element={<RagFlowBuilderPage />} />
+          <Route path="rag-flow-builder/:flowId" element={<RagFlowBuilderPage />} />
+          <Route path="rag-flows" element={<RagFlowsPage />} />
+          <Route path="rag-experience" element={<RagFlowExperiencePage />} />
         </Routes>
       </section>
     </div>
@@ -166,23 +209,48 @@ function SettingsPage() {
   const location = useLocation()
   const selectedKey = location.pathname.includes('/processing-rules')
     ? '/settings/processing-rules'
-    : '/settings/model-defaults'
+    : location.pathname.includes('/components/rerank')
+      ? '/settings/components/rerank'
+      : location.pathname.includes('/components/filter')
+        ? '/settings/components/filter'
+        : location.pathname.includes('/components/compressor')
+          ? '/settings/components/compressor'
+          : '/settings/model-defaults'
   const items: MenuProps['items'] = [
     { key: '/settings/model-defaults', icon: <SettingOutlined />, label: <Link to="/settings/model-defaults">默认模型</Link> },
     { key: '/settings/processing-rules', icon: <FileTextOutlined />, label: <Link to="/settings/processing-rules">默认处理规则</Link> },
+    {
+      key: 'component-root',
+      icon: <NodeIndexOutlined />,
+      label: '组件配置',
+      children: [
+        { key: '/settings/components/rerank', icon: <NodeIndexOutlined />, label: <Link to="/settings/components/rerank">Reranker 配置</Link> },
+        { key: '/settings/components/filter', icon: <NodeIndexOutlined />, label: <Link to="/settings/components/filter">Filter 配置</Link> },
+        { key: '/settings/components/compressor', icon: <NodeIndexOutlined />, label: <Link to="/settings/components/compressor">Compressor 配置</Link> },
+      ],
+    },
   ]
 
   return (
     <div className="workspace">
       <aside className="configRail">
         <div className="railSectionTitle">设置</div>
-        <Menu className="configMenu" mode="inline" selectedKeys={[selectedKey]} items={items} />
+        <Menu
+          className="configMenu"
+          mode="inline"
+          selectedKeys={[selectedKey]}
+          defaultOpenKeys={['component-root']}
+          items={items}
+        />
       </aside>
       <section className="workspaceContent">
         <Routes>
           <Route index element={<Navigate to="/settings/model-defaults" replace />} />
           <Route path="model-defaults" element={<ModelDefaultsPage />} />
           <Route path="processing-rules" element={<ProcessingRulesPage />} />
+          <Route path="components/rerank" element={<ComponentConfigsPage nodeType="passage_reranker" />} />
+          <Route path="components/filter" element={<ComponentConfigsPage nodeType="passage_filter" />} />
+          <Route path="components/compressor" element={<ComponentConfigsPage nodeType="passage_compressor" />} />
         </Routes>
       </section>
     </div>

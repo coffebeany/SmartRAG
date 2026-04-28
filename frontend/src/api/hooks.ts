@@ -9,6 +9,7 @@ import type {
   ChunkRun,
   ChunkRunCompare,
   ChunkStrategy,
+  ComponentConfig,
   HealthCheckResult,
   MaterialBatch,
   MaterialBatchVersion,
@@ -24,7 +25,15 @@ import type {
   ParserStrategy,
   ProcessingDefaultRule,
   ProviderInfo,
+  RagComponent,
+  RagFlow,
+  RagFlowRun,
   UploadFilesResult,
+  VectorDB,
+  VectorFileRun,
+  VectorPlan,
+  VectorRun,
+  VectorRunCompare,
 } from './types'
 
 export function useModels() {
@@ -428,5 +437,167 @@ export function useChunkRunCompare(batchId?: string) {
     queryKey: ['chunk-run-compare', batchId],
     queryFn: () => apiClient.get<ChunkRunCompare[]>(`/material-batches/${batchId}/chunk-runs/compare`),
     enabled: Boolean(batchId),
+  })
+}
+
+export function useVectorDBs() {
+  return useQuery({
+    queryKey: ['vectordbs'],
+    queryFn: () => apiClient.get<VectorDB[]>('/vectordbs'),
+  })
+}
+
+export function useRefreshVectorDBs() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiClient.post<VectorDB[]>('/vectordbs/refresh'),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['vectordbs'], data)
+      queryClient.invalidateQueries({ queryKey: ['vector-plan'] })
+    },
+  })
+}
+
+export function useVectorPlan(batchId?: string, chunkRunId?: string) {
+  return useQuery({
+    queryKey: ['vector-plan', batchId, chunkRunId],
+    queryFn: () => apiClient.get<VectorPlan>(`/material-batches/${batchId}/vector-plan?chunk_run_id=${chunkRunId}`),
+    enabled: Boolean(batchId && chunkRunId),
+  })
+}
+
+export function useCreateVectorRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: unknown) => apiClient.post<VectorRun>('/vector-runs', payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vector-runs'] }),
+  })
+}
+
+export function useVectorRuns() {
+  return useQuery({
+    queryKey: ['vector-runs'],
+    queryFn: () => apiClient.get<VectorRun[]>('/vector-runs'),
+    refetchInterval: (query) => {
+      const runs = query.state.data as VectorRun[] | undefined
+      return runs?.some((run) => ['pending', 'running'].includes(run.status)) ? 1500 : false
+    },
+  })
+}
+
+export function useDeleteVectorRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => apiClient.delete(`/vector-runs/${runId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vector-runs'] }),
+  })
+}
+
+export function useVectorRun(runId?: string) {
+  return useQuery({
+    queryKey: ['vector-run', runId],
+    queryFn: () => apiClient.get<VectorRun>(`/vector-runs/${runId}`),
+    enabled: Boolean(runId),
+    refetchInterval: (query) => {
+      const run = query.state.data as VectorRun | undefined
+      return run && ['pending', 'running'].includes(run.status) ? 1500 : false
+    },
+  })
+}
+
+export function useVectorFileRuns(runId?: string) {
+  return useQuery({
+    queryKey: ['vector-file-runs', runId],
+    queryFn: () => apiClient.get<VectorFileRun[]>(`/vector-runs/${runId}/files`),
+    enabled: Boolean(runId),
+    refetchInterval: 1500,
+  })
+}
+
+export function useVectorRunCompare(batchId?: string) {
+  return useQuery({
+    queryKey: ['vector-run-compare', batchId],
+    queryFn: () => apiClient.get<VectorRunCompare[]>(`/material-batches/${batchId}/vector-runs/compare`),
+    enabled: Boolean(batchId),
+  })
+}
+
+export function useRagComponents(nodeType?: string) {
+  return useQuery({
+    queryKey: ['rag-components', nodeType],
+    queryFn: () => apiClient.get<RagComponent[]>(`/rag-components${nodeType ? `?node_type=${nodeType}` : ''}`),
+  })
+}
+
+export function useComponentConfigs(nodeType?: string) {
+  return useQuery({
+    queryKey: ['component-configs', nodeType],
+    queryFn: () => apiClient.get<ComponentConfig[]>(`/component-configs${nodeType ? `?node_type=${nodeType}` : ''}`),
+  })
+}
+
+export function useCreateComponentConfig() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: unknown) => apiClient.post<ComponentConfig>('/component-configs', payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['component-configs'] }),
+  })
+}
+
+export function useUpdateComponentConfig() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ configId, payload }: { configId: string; payload: unknown }) =>
+      apiClient.patch<ComponentConfig>(`/component-configs/${configId}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['component-configs'] }),
+  })
+}
+
+export function useDeleteComponentConfig() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (configId: string) => apiClient.delete(`/component-configs/${configId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['component-configs'] }),
+  })
+}
+
+export function useRagFlows() {
+  return useQuery({
+    queryKey: ['rag-flows'],
+    queryFn: () => apiClient.get<RagFlow[]>('/rag-flows'),
+  })
+}
+
+export function useCreateRagFlow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: unknown) => apiClient.post<RagFlow>('/rag-flows', payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rag-flows'] }),
+  })
+}
+
+export function useUpdateRagFlow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ flowId, payload }: { flowId: string; payload: unknown }) =>
+      apiClient.patch<RagFlow>(`/rag-flows/${flowId}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rag-flows'] }),
+  })
+}
+
+export function useDeleteRagFlow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (flowId: string) => apiClient.delete(`/rag-flows/${flowId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rag-flows'] }),
+  })
+}
+
+export function useRunRagFlow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ flowId, query }: { flowId: string; query: string }) =>
+      apiClient.post<RagFlowRun>(`/rag-flows/${flowId}/run`, { query }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rag-flows'] }),
   })
 }

@@ -244,6 +244,78 @@ export interface ParseElementsPage {
   limit: number
 }
 
+export interface RagComponent {
+  node_type: string
+  module_type: string
+  display_name: string
+  description: string
+  capabilities: string[]
+  config_schema: Record<string, unknown>
+  secret_config_schema: Record<string, unknown>
+  default_config: Record<string, unknown>
+  source: string
+  executable: boolean
+  requires_config: boolean
+  required_dependencies: string[]
+  required_env_vars: string[]
+  requires_llm: boolean
+  requires_embedding: boolean
+  requires_api_key: boolean
+  dependency_install_hint?: string | null
+  availability_status: string
+  availability_reason: string
+}
+
+export interface ComponentConfig {
+  config_id: string
+  node_type: string
+  module_type: string
+  display_name: string
+  config: Record<string, unknown>
+  secret_config_masked: Record<string, string | null>
+  enabled: boolean
+  availability_status: string
+  availability_reason: string
+  created_at: string
+  updated_at: string
+}
+
+export interface RagFlowNode {
+  node_type: string
+  module_type: string
+  config: Record<string, unknown>
+  component_config_id?: string | null
+  enabled: boolean
+}
+
+export interface RagFlow {
+  flow_id: string
+  flow_name: string
+  description?: string | null
+  vector_run_id: string
+  vector_run_status?: string | null
+  batch_name?: string | null
+  vectordb_name?: string | null
+  retrieval_config: Record<string, unknown>
+  nodes: RagFlowNode[]
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface RagFlowRun {
+  run_id: string
+  flow_id: string
+  query: string
+  status: string
+  final_passages: Record<string, unknown>[]
+  trace_events: Record<string, unknown>[]
+  latency_ms?: number | null
+  error?: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ChunkStrategy {
   chunker_name: string
   display_name: string
@@ -357,6 +429,112 @@ export interface ChunkRunCompare {
   total_chunks: number
   stats: Record<string, unknown>
   chunker_config: Record<string, unknown>
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+}
+
+export interface VectorDB {
+  vectordb_name: string
+  display_name: string
+  description: string
+  db_type: string
+  capabilities: string[]
+  config_schema: Record<string, unknown>
+  default_config: Record<string, unknown>
+  advanced_options_schema: Record<string, unknown>
+  default_storage_uri?: string | null
+  source: string
+  enabled: boolean
+  availability_status: string
+  availability_reason: string
+  required_dependencies: string[]
+}
+
+export interface VectorPlanFile {
+  chunk_file_run_id: string
+  source_file_id: string
+  original_filename?: string | null
+  status: string
+  chunk_count: number
+  char_count: number
+  token_count: number
+}
+
+export interface VectorPlan {
+  batch: MaterialBatch
+  chunk_run: ChunkRun
+  files: VectorPlanFile[]
+  vectordbs: VectorDB[]
+}
+
+export interface VectorRun {
+  run_id: string
+  batch_id: string
+  batch_version_id?: string | null
+  chunk_run_id: string
+  embedding_model_id: string
+  embedding_model_snapshot: Record<string, unknown>
+  vectordb_name: string
+  vectordb_config: Record<string, unknown>
+  embedding_config: Record<string, unknown>
+  index_config: Record<string, unknown>
+  file_selection: Record<string, unknown>
+  collection_name: string
+  storage_uri: string
+  similarity_metric: string
+  embedding_dimension?: number | null
+  status: string
+  total_files: number
+  completed_files: number
+  failed_files: number
+  total_chunks: number
+  total_vectors: number
+  stats: Record<string, unknown>
+  error_summary?: string | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+  updated_at: string
+  batch_name?: string | null
+  chunk_status?: string | null
+}
+
+export interface VectorFileRun {
+  file_run_id: string
+  run_id: string
+  chunk_file_run_id: string
+  source_file_id: string
+  status: string
+  chunk_count: number
+  vector_count: number
+  failed_vectors: number
+  latency_ms?: number | null
+  error?: string | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+  updated_at: string
+  original_filename?: string | null
+}
+
+export interface VectorRunCompare {
+  run_id: string
+  batch_id: string
+  batch_name?: string | null
+  chunk_run_id: string
+  embedding_model_id: string
+  embedding_model_name?: string | null
+  vectordb_name: string
+  status: string
+  total_files: number
+  completed_files: number
+  failed_files: number
+  total_chunks: number
+  total_vectors: number
+  similarity_metric: string
+  embedding_dimension?: number | null
+  stats: Record<string, unknown>
   started_at?: string | null
   ended_at?: string | null
   created_at: string

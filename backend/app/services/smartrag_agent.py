@@ -46,7 +46,29 @@ Reasoning visibility:
 
 
 def _agent_run_out(row: SmartRagAgentRun) -> AgentRunOut:
-    return AgentRunOut.model_validate(row, from_attributes=True)
+    return AgentRunOut(
+        run_id=row.run_id,
+        model_id=row.model_id,
+        message=row.message,
+        enabled_action_names=list(row.enabled_action_names or []),
+        status=row.status,
+        answer=row.answer,
+        error=row.error,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        started_at=row.started_at,
+        ended_at=row.ended_at,
+        tool_logs=jsonable_encoder(row.__dict__.get("tool_logs", [])),
+        events=jsonable_encoder(row.__dict__.get("events", [])),
+    )
+
+
+def _chat_openai_base_url(base_url: str) -> str:
+    clean = base_url.rstrip("/")
+    for suffix in ("/chat/completions", "/completions", "/embeddings"):
+        if clean.endswith(suffix):
+            return clean[: -len(suffix)]
+    return clean
 
 
 async def list_agent_actions() -> list[AgentActionSpecOut]:
@@ -319,7 +341,7 @@ async def execute_agent_run(run_id: str) -> None:
 
         chat_model = ChatOpenAI(
             model=model.model_name,
-            base_url=model.base_url,
+            base_url=_chat_openai_base_url(model.base_url),
             api_key=decrypt_secret(model.api_key_encrypted) or "not-set",
             timeout=model.timeout_seconds,
             max_retries=model.max_retries,

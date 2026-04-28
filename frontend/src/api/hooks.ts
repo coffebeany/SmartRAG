@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from './client'
 import type {
   AgentProfile,
+  AgentActionSpec,
   AgentTypeInfo,
   ChunkFileRun,
   ChunkPage,
@@ -33,6 +34,7 @@ import type {
   RagComponent,
   RagFlow,
   RagFlowRun,
+  SmartRagAgentRun,
   UploadFilesResult,
   VectorDB,
   VectorFileRun,
@@ -51,6 +53,17 @@ export function useProviders() {
 
 export function useAgentTypes() {
   return useQuery({ queryKey: ['agent-types'], queryFn: () => apiClient.get<AgentTypeInfo[]>('/agent-types') })
+}
+
+export function useAgentActions() {
+  return useQuery({ queryKey: ['agent-actions'], queryFn: () => apiClient.get<AgentActionSpec[]>('/agent-actions') })
+}
+
+export function useCreateSmartRagAgentRun() {
+  return useMutation({
+    mutationFn: (payload: { model_id: string; message: string; enabled_action_names?: string[] }) =>
+      apiClient.post<SmartRagAgentRun>('/smartrag-agent/runs', payload),
+  })
 }
 
 export function useCreateModel() {

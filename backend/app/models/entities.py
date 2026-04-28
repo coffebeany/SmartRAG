@@ -105,6 +105,69 @@ class ModelUsageEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class SmartRagAgentRun(Base):
+    __tablename__ = "smartrag_agent_runs"
+
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    model_id: Mapped[str] = mapped_column(
+        ForeignKey("model_connections.model_id", ondelete="RESTRICT"), index=True
+    )
+    message: Mapped[str] = mapped_column(Text)
+    enabled_action_names: Mapped[list[str]] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    answer: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    model: Mapped[ModelConnection] = relationship()
+    events: Mapped[list["SmartRagAgentRunEvent"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="SmartRagAgentRunEvent.sequence"
+    )
+    tool_logs: Mapped[list["SmartRagAgentToolLog"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan", order_by="SmartRagAgentToolLog.created_at"
+    )
+
+
+class SmartRagAgentRunEvent(Base):
+    __tablename__ = "smartrag_agent_run_events"
+
+    event_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("smartrag_agent_runs.run_id", ondelete="CASCADE"), index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(60), index=True)
+    sequence: Mapped[int] = mapped_column(Integer, index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[SmartRagAgentRun] = relationship(back_populates="events")
+
+
+class SmartRagAgentToolLog(Base):
+    __tablename__ = "smartrag_agent_tool_logs"
+
+    tool_log_id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("smartrag_agent_runs.run_id", ondelete="CASCADE"), index=True
+    )
+    tool_name: Mapped[str] = mapped_column(String(160), index=True)
+    tool_args: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(30), default="running", index=True)
+    output: Mapped[dict | list | str | int | float | bool | None] = mapped_column(JSON)
+    error: Mapped[str | None] = mapped_column(Text)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run: Mapped[SmartRagAgentRun] = relationship(back_populates="tool_logs")
+
+
 class MaterialBatch(Base):
     __tablename__ = "material_batches"
 

@@ -319,6 +319,68 @@ export interface RagFlowRun {
   updated_at: string
 }
 
+export interface AgentActionSpec {
+  name: string
+  title: string
+  description: string
+  input_schema: Record<string, unknown>
+  output_schema: Record<string, unknown>
+  permission_scope: string
+  is_destructive: boolean
+  tags: string[]
+  resource_uri_template?: string | null
+}
+
+export type AgentRunStatus = 'pending' | 'running' | 'completed' | 'failed'
+
+export type AgentRunEventType =
+  | 'message_delta'
+  | 'reasoning_delta'
+  | 'tool_call_started'
+  | 'tool_call_result'
+  | 'tool_call_error'
+  | 'final_answer'
+  | 'run_error'
+
+export interface AgentToolLog {
+  tool_log_id: string
+  run_id: string
+  tool_name: string
+  tool_args: Record<string, unknown>
+  status: string
+  output?: unknown
+  error?: string | null
+  latency_ms?: number | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+}
+
+export interface AgentRunEvent {
+  event_id: string
+  run_id: string
+  event_type: AgentRunEventType
+  sequence: number
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+export interface SmartRagAgentRun {
+  run_id: string
+  model_id: string
+  message: string
+  enabled_action_names: string[]
+  status: AgentRunStatus
+  answer?: string | null
+  error?: string | null
+  created_at: string
+  updated_at: string
+  started_at?: string | null
+  ended_at?: string | null
+  tool_logs: AgentToolLog[]
+  events: AgentRunEvent[]
+}
+
 export interface EvaluationMetric {
   metric_id: string
   display_name: string

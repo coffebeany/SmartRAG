@@ -349,6 +349,107 @@ body {
   line-height: 1.35;
 }
 
+.agentConsolePage {
+  min-height: calc(100vh - 240px);
+}
+
+.agentConsoleGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.agentChatPanel,
+.agentToolPanel {
+  min-width: 0;
+  border: 1px solid rgba(29, 29, 31, 0.08);
+  border-radius: 8px;
+  background: #fbfaf6;
+}
+
+.agentChatPanel {
+  display: grid;
+  grid-template-rows: minmax(360px, 1fr) auto;
+  min-height: 620px;
+}
+
+.agentChatStream {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  overflow: auto;
+}
+
+.agentBubble {
+  max-width: min(760px, 86%);
+  padding: 12px 14px;
+  border: 1px solid rgba(29, 29, 31, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.agentBubble.user {
+  align-self: flex-end;
+  background: #ede9df;
+}
+
+.agentBubble.assistant {
+  align-self: flex-start;
+}
+
+.agentBubble p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agentComposer {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+  border-top: 1px solid rgba(29, 29, 31, 0.08);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.agentModelSelect {
+  width: 100%;
+}
+
+.agentToolPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.agentReasoning {
+  white-space: pre-wrap;
+}
+
+.agentToolBody {
+  display: grid;
+  gap: 6px;
+}
+
+.agentToolBody pre {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  color: #262522;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  background: #f6f4ef;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .ant-card {
   border-radius: 8px;
   border-color: rgba(29, 29, 31, 0.08);
@@ -430,6 +531,18 @@ body {
   }
 
   .ruleGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .agentConsoleGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .agentChatPanel {
+    min-height: 540px;
+  }
+
+  .agentComposer {
     grid-template-columns: 1fr;
   }
 }

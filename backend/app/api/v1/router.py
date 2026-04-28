@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import agents, catalog, chunks, evaluations, materials, models, rag, vectors
+from app.api.v1 import agents, catalog, chunks, evaluations, materials, models, rag, smartrag_agent, vectors
 
 api_router = APIRouter()
 api_router.include_router(catalog.router, tags=["catalog"])
@@ -13,3 +13,4 @@ api_router.include_router(evaluations.router, tags=["parse-evaluations"])
 api_router.include_router(chunks.router, tags=["chunks"])
 api_router.include_router(vectors.router, tags=["vectors"])
 api_router.include_router(rag.router, tags=["rag"])
+api_router.include_router(smartrag_agent.router, tags=["smartrag-agent"])

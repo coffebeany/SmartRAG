@@ -37,6 +37,7 @@ import ProcessingRulesPage from './pages/ProcessingRulesPage'
 import RagFlowBuilderPage from './pages/RagFlowBuilderPage'
 import RagFlowExperiencePage from './pages/RagFlowExperiencePage'
 import RagFlowsPage from './pages/RagFlowsPage'
+import SmartRAGAgentPage from './pages/SmartRAGAgentPage'
 import VectorDBsPage from './pages/VectorDBsPage'
 import VectorRunDetailPage from './pages/VectorRunDetailPage'
 import VectorRunsPage from './pages/VectorRunsPage'
@@ -165,7 +166,16 @@ function BuildWorkspace() {
   }
   if (location.pathname.includes('/evaluation-reports')) selectedKey = '/build/evaluation-reports'
   if (location.pathname.includes('/chunk-compare')) selectedKey = '/build/chunk-compare'
+  if (location.pathname.includes('/smartrag-agent')) selectedKey = '/build/smartrag-agent'
   const items: MenuProps['items'] = [
+    {
+      key: 'build-agent-root',
+      icon: <RobotOutlined />,
+      label: 'SmartRAG Agent',
+      children: [
+        { key: '/build/smartrag-agent', icon: <RobotOutlined />, label: <Link to="/build/smartrag-agent">Agent 对话</Link> },
+      ],
+    },
     {
       key: 'build-material-root',
       icon: <FolderOpenOutlined />,
@@ -217,13 +227,14 @@ function BuildWorkspace() {
           className="configMenu"
           mode="inline"
           selectedKeys={[selectedKey]}
-          defaultOpenKeys={['build-material-root', 'build-vector-root', 'build-rag-root', 'build-eval-root']}
+          defaultOpenKeys={['build-agent-root', 'build-material-root', 'build-vector-root', 'build-rag-root', 'build-eval-root']}
           items={items}
         />
       </aside>
       <section className="workspaceContent">
         <Routes>
           <Route index element={<Navigate to="/build/material-parse" replace />} />
+          <Route path="smartrag-agent" element={<SmartRAGAgentPage />} />
           <Route path="material-parse" element={<MaterialParsePage />} />
           <Route path="parse-runs" element={<ParseRunsPage />} />
           <Route path="parse-runs/:runId" element={<ParseRunDetailPage />} />

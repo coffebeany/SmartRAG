@@ -10,7 +10,7 @@ from app.services.evaluations import (
     list_evaluation_frameworks,
     list_parse_evaluators,
 )
-from app.evaluators.adapters import _ragas_embeddings_for_model
+from app.evaluators.adapters import _ragas_embeddings_for_model, _source_chunk_scores
 from app.evaluators.registry import evaluation_framework_registry
 
 
@@ -77,6 +77,15 @@ async def test_evaluation_framework_registry_exposes_ragas() -> None:
         "faithfulness",
         "answer_relevancy",
     ]
+    metric_ids = {metric.metric_id for metric in ragas.metrics}
+    assert {
+        "source_chunk_hit@3",
+        "source_chunk_hit@5",
+        "source_chunk_hit@10",
+        "source_chunk_recall",
+        "source_chunk_mrr",
+        "source_chunk_rank",
+    }.issubset(metric_ids)
     assert {"testset_size", "advanced_config"}.issubset(ragas.generator_config_schema["properties"])
     assert ragas.default_generator_config["language"] == "zh"
     assert ragas.availability_status in {"available", "missing_dependency"}
@@ -107,3 +116,27 @@ def test_generator_config_merges_defaults_and_advanced_config() -> None:
 def test_ragas_embedding_adapter_requires_explicit_model() -> None:
     with pytest.raises(RuntimeError, match="default_embedding_model"):
         _ragas_embeddings_for_model(None)
+
+
+def test_source_chunk_metrics_use_source_and_retrieved_chunk_ids() -> None:
+    scores = _source_chunk_scores(
+        {
+            "source_chunk_ids": ["c3", "c9"],
+            "retrieved_chunk_ids": ["c2", "c8", "c9", "c1", "c3"],
+        },
+        {
+            "source_chunk_hit@3",
+            "source_chunk_hit@5",
+            "source_chunk_hit@10",
+            "source_chunk_recall",
+            "source_chunk_mrr",
+            "source_chunk_rank",
+        },
+    )
+
+    assert scores["source_chunk_hit@3"] == 1.0
+    assert scores["source_chunk_hit@5"] == 1.0
+    assert scores["source_chunk_hit@10"] == 1.0
+    assert scores["source_chunk_recall"] == 1.0
+    assert scores["source_chunk_mrr"] == pytest.approx(1 / 3)
+    assert scores["source_chunk_rank"] == 3.0

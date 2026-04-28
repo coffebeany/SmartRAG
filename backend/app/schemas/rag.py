@@ -20,6 +20,7 @@ class RagComponentOut(BaseModel):
     required_dependencies: list[str]
     required_env_vars: list[str]
     requires_llm: bool
+    llm_config_mode: str = "none"
     requires_embedding: bool
     requires_api_key: bool
     dependency_install_hint: str | None = None

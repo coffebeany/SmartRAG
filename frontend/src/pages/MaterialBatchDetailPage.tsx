@@ -12,6 +12,7 @@ import {
   useUploadMaterialFiles,
 } from '../api/hooks'
 import type { MaterialBatchVersion, MaterialFile } from '../api/types'
+import { TableActionButton } from '../components/TableActionButton'
 
 export default function MaterialBatchDetailPage() {
   const { batchId } = useParams()
@@ -45,7 +46,7 @@ export default function MaterialBatchDetailPage() {
       {
         title: '操作',
         render: (_, record) => record.status === 'active' && (
-          <Button
+          <TableActionButton
             danger
             onClick={() => modal.confirm({
               title: '逻辑删除文件',
@@ -54,7 +55,7 @@ export default function MaterialBatchDetailPage() {
             })}
           >
             删除
-          </Button>
+          </TableActionButton>
         ),
       },
     ],

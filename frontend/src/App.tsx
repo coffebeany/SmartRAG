@@ -173,25 +173,59 @@ function BuildWorkspace() {
                         ? '/build/parse-runs'
                         : '/build/material-parse'
   const items: MenuProps['items'] = [
-    { key: '/build/material-parse', icon: <FileTextOutlined />, label: <Link to="/build/material-parse">材料解析</Link> },
-    { key: '/build/parse-runs', icon: <BuildOutlined />, label: <Link to="/build/parse-runs">解析任务</Link> },
-    { key: '/build/material-chunk', icon: <FileTextOutlined />, label: <Link to="/build/material-chunk">材料分块</Link> },
-    { key: '/build/chunk-runs', icon: <BuildOutlined />, label: <Link to="/build/chunk-runs">分块任务</Link> },
-    { key: '/build/chunk-compare', icon: <DatabaseOutlined />, label: <Link to="/build/chunk-compare">分块对比</Link> },
-    { key: '/build/material-vector', icon: <DatabaseOutlined />, label: <Link to="/build/material-vector">材料向量化</Link> },
-    { key: '/build/vector-runs', icon: <BuildOutlined />, label: <Link to="/build/vector-runs">向量化任务</Link> },
-    { key: '/build/rag-flow-builder', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flow-builder">流程构建</Link> },
-    { key: '/build/rag-flows', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flows">流程列表</Link> },
-    { key: '/build/rag-experience', icon: <RobotOutlined />, label: <Link to="/build/rag-experience">流程体验</Link> },
-    { key: '/build/evaluation-datasets', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-datasets">测评集生成</Link> },
-    { key: '/build/evaluation-reports', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-reports">应用测评</Link> },
+    {
+      key: 'build-material-root',
+      icon: <FolderOpenOutlined />,
+      label: '材料处理',
+      children: [
+        { key: '/build/material-parse', icon: <FileTextOutlined />, label: <Link to="/build/material-parse">材料解析</Link> },
+        { key: '/build/parse-runs', icon: <BuildOutlined />, label: <Link to="/build/parse-runs">解析任务</Link> },
+        { key: '/build/material-chunk', icon: <FileTextOutlined />, label: <Link to="/build/material-chunk">材料分块</Link> },
+        { key: '/build/chunk-runs', icon: <BuildOutlined />, label: <Link to="/build/chunk-runs">分块任务</Link> },
+        { key: '/build/chunk-compare', icon: <DatabaseOutlined />, label: <Link to="/build/chunk-compare">分块对比</Link> },
+      ],
+    },
+    {
+      key: 'build-vector-root',
+      icon: <DatabaseOutlined />,
+      label: '向量化',
+      children: [
+        { key: '/build/material-vector', icon: <DatabaseOutlined />, label: <Link to="/build/material-vector">材料向量化</Link> },
+        { key: '/build/vector-runs', icon: <BuildOutlined />, label: <Link to="/build/vector-runs">向量化任务</Link> },
+      ],
+    },
+    {
+      key: 'build-rag-root',
+      icon: <NodeIndexOutlined />,
+      label: 'RAG 流程',
+      children: [
+        { key: '/build/rag-flow-builder', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flow-builder">流程构建</Link> },
+        { key: '/build/rag-flows', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flows">流程列表</Link> },
+        { key: '/build/rag-experience', icon: <RobotOutlined />, label: <Link to="/build/rag-experience">流程体验</Link> },
+      ],
+    },
+    {
+      key: 'build-eval-root',
+      icon: <FundProjectionScreenOutlined />,
+      label: '测评',
+      children: [
+        { key: '/build/evaluation-datasets', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-datasets">测评集生成</Link> },
+        { key: '/build/evaluation-reports', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-reports">应用测评</Link> },
+      ],
+    },
   ]
 
   return (
     <div className="workspace">
       <aside className="configRail">
-        <div className="railSectionTitle">材料处理</div>
-        <Menu className="configMenu" mode="inline" selectedKeys={[selectedKey]} items={items} />
+        <div className="railSectionTitle">构建中心</div>
+        <Menu
+          className="configMenu"
+          mode="inline"
+          selectedKeys={[selectedKey]}
+          defaultOpenKeys={['build-material-root', 'build-vector-root', 'build-rag-root', 'build-eval-root']}
+          items={items}
+        />
       </aside>
       <section className="workspaceContent">
         <Routes>

@@ -3,6 +3,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { useMemo, useState } from 'react'
 import { useCreateModel, useModels, useProviders, useTestModel, useTestModelDraft, useTestModelDraftUpdate, useUpdateModel } from '../api/hooks'
 import type { HealthCheckResult, ModelCategory, ModelConnection } from '../api/types'
+import { TableActionButton } from '../components/TableActionButton'
 
 interface ModelsPageProps {
   title?: string
@@ -49,10 +50,10 @@ export default function ModelsPage({
       title: '操作',
       render: (_, record) => (
         <Space>
-          <Button onClick={() => openEdit(record)}>编辑</Button>
-          <Button loading={testModel.isPending} onClick={() => testModel.mutate(record.model_id, { onSuccess: () => message.success('连接测试完成') })}>
+          <TableActionButton onClick={() => openEdit(record)}>编辑</TableActionButton>
+          <TableActionButton loading={testModel.isPending} onClick={() => testModel.mutate(record.model_id, { onSuccess: () => message.success('连接测试完成') })}>
             测试连接
-          </Button>
+          </TableActionButton>
         </Space>
       ),
     },

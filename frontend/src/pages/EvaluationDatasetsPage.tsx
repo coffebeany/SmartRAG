@@ -1,4 +1,4 @@
-import { Alert, App, Button, Card, Form, Input, InputNumber, Popconfirm, Progress, Select, Space, Table, Tag, Typography } from 'antd'
+import { Alert, App, Button, Card, Collapse, Form, Input, InputNumber, Popconfirm, Progress, Select, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
@@ -13,6 +13,7 @@ import {
   useModels,
 } from '../api/hooks'
 import type { ChunkRun, EvaluationDatasetRun } from '../api/types'
+import { TableActionButton } from '../components/TableActionButton'
 
 function parseJson(text: string) {
   try {
@@ -114,7 +115,7 @@ export default function EvaluationDatasetsPage() {
       width: 170,
       render: (_, record) => (
         <Space>
-          <Link to={`/build/evaluation-datasets/${record.run_id}`}>查看</Link>
+          <Link className="tableActionLink" to={`/build/evaluation-datasets/${record.run_id}`}>查看</Link>
           <Popconfirm
             title="删除测评集"
             description="会同步删除该测评集、样本明细及其关联测评报告。"
@@ -126,7 +127,7 @@ export default function EvaluationDatasetsPage() {
               onError: (error) => message.error(error instanceof Error ? error.message : '删除失败'),
             })}
           >
-            <Button danger size="small" disabled={['pending', 'running'].includes(record.status)} loading={deleteRun.isPending}>删除</Button>
+            <TableActionButton danger disabled={['pending', 'running'].includes(record.status)} loading={deleteRun.isPending}>删除</TableActionButton>
           </Popconfirm>
         </Space>
       ),
@@ -174,20 +175,43 @@ export default function EvaluationDatasetsPage() {
             <Form.Item name="judge_llm_model_id" label="Judge LLM" rules={[{ required: true }]}><Select className="wideSelect" options={llmOptions} /></Form.Item>
             <Form.Item name="embedding_model_id" label="Embedding" rules={[{ required: true, message: '请选择 embedding 模型' }]}><Select className="wideSelect" options={embeddingOptions} /></Form.Item>
             <Form.Item name="testset_size" label="样本数"><InputNumber min={1} max={500} /></Form.Item>
-            <Form.Item name="language" label="语言"><Input /></Form.Item>
+            <Form.Item name="language" label="语言">
+              <Select
+                className="wideSelect"
+                options={[
+                  { value: 'zh', label: '中文 / zh' },
+                  { value: 'en', label: 'English / en' },
+                  { value: 'ja', label: '日本語 / ja' },
+                  { value: 'ko', label: '한국어 / ko' },
+                ]}
+              />
+            </Form.Item>
           </Space>
-          <Space wrap>
-            <Form.Item name="single_hop_specific" label="Single-hop"><InputNumber min={0} max={1} step={0.1} /></Form.Item>
-            <Form.Item name="multi_hop_specific" label="Multi-hop Specific"><InputNumber min={0} max={1} step={0.1} /></Form.Item>
-            <Form.Item name="multi_hop_abstract" label="Multi-hop Abstract"><InputNumber min={0} max={1} step={0.1} /></Form.Item>
-            <Form.Item name="max_chunks" label="最大 Chunk"><InputNumber min={1} /></Form.Item>
-            <Form.Item name="min_char_count" label="最小字符"><InputNumber min={0} /></Form.Item>
-            <Form.Item name="max_char_count" label="最大字符"><InputNumber min={1} /></Form.Item>
-            <Form.Item name="random_seed" label="Seed"><InputNumber /></Form.Item>
-          </Space>
-          <Form.Item name="persona" label="Persona"><Input /></Form.Item>
-          <Form.Item name="llm_context" label="业务背景"><Input.TextArea rows={3} /></Form.Item>
-          <Form.Item name="advanced_config_text" label="高级 JSON"><Input.TextArea rows={5} /></Form.Item>
+          <Collapse
+            ghost
+            items={[
+              {
+                key: 'advanced',
+                label: '高级选项',
+                children: (
+                  <>
+                    <Space wrap>
+                      <Form.Item name="single_hop_specific" label="Single-hop"><InputNumber min={0} max={1} step={0.1} /></Form.Item>
+                      <Form.Item name="multi_hop_specific" label="Multi-hop Specific"><InputNumber min={0} max={1} step={0.1} /></Form.Item>
+                      <Form.Item name="multi_hop_abstract" label="Multi-hop Abstract"><InputNumber min={0} max={1} step={0.1} /></Form.Item>
+                      <Form.Item name="max_chunks" label="最大 Chunk"><InputNumber min={1} /></Form.Item>
+                      <Form.Item name="min_char_count" label="最小字符"><InputNumber min={0} /></Form.Item>
+                      <Form.Item name="max_char_count" label="最大字符"><InputNumber min={1} /></Form.Item>
+                      <Form.Item name="random_seed" label="Seed"><InputNumber /></Form.Item>
+                    </Space>
+                    <Form.Item name="persona" label="Persona"><Input /></Form.Item>
+                    <Form.Item name="llm_context" label="业务背景"><Input.TextArea rows={3} /></Form.Item>
+                    <Form.Item name="advanced_config_text" label="高级 JSON"><Input.TextArea rows={5} /></Form.Item>
+                  </>
+                ),
+              },
+            ]}
+          />
           <Button type="primary" loading={createRun.isPending} onClick={submit}>创建测评集任务</Button>
         </Form>
       </Card>

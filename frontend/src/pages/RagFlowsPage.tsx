@@ -3,6 +3,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { Link } from 'react-router-dom'
 import { useDeleteRagFlow, useRagFlows } from '../api/hooks'
 import type { RagFlow } from '../api/types'
+import { TableActionButton } from '../components/TableActionButton'
 
 export default function RagFlowsPage() {
   const flows = useRagFlows()
@@ -33,10 +34,10 @@ export default function RagFlowsPage() {
       title: '操作',
       render: (_, record) => (
         <Space>
-          <Link to={`/build/rag-flow-builder/${record.flow_id}`}>编辑</Link>
-          <Link to="/build/rag-experience">体验</Link>
+          <Link className="tableActionLink" to={`/build/rag-flow-builder/${record.flow_id}`}>编辑</Link>
+          <Link className="tableActionLink" to="/build/rag-experience">体验</Link>
           <Popconfirm title="删除该流程？" onConfirm={() => deleteFlow.mutate(record.flow_id)}>
-            <Button danger loading={deleteFlow.isPending}>删除</Button>
+            <TableActionButton danger loading={deleteFlow.isPending}>删除</TableActionButton>
           </Popconfirm>
         </Space>
       ),

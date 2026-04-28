@@ -3,6 +3,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { useEffect, useMemo, useState } from 'react'
 import { useAgentTypes, useAgents, useCreateAgent, useDryRunAgent, useDryRunAgentDraft, useModels, useUpdateAgent } from '../api/hooks'
 import type { AgentProfile } from '../api/types'
+import { TableActionButton } from '../components/TableActionButton'
 
 const DEFAULT_DRY_RUN_INPUT = 'Hello,SmartRAG!'
 
@@ -201,8 +202,8 @@ export default function AgentProfilesPage() {
       title: '操作',
       render: (_, record) => (
         <Space>
-          <Button onClick={() => openEdit(record)}>编辑</Button>
-          <Button
+          <TableActionButton onClick={() => openEdit(record)}>编辑</TableActionButton>
+          <TableActionButton
             loading={dryRun.isPending}
             onClick={() => dryRun.mutate(
               { agentId: record.agent_id, payload: { input_text: DEFAULT_DRY_RUN_INPUT } },
@@ -217,7 +218,7 @@ export default function AgentProfilesPage() {
             )}
           >
             Dry-run
-          </Button>
+          </TableActionButton>
         </Space>
       ),
     },

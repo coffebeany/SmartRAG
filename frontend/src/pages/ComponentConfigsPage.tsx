@@ -12,6 +12,7 @@ import {
 } from '../api/hooks'
 import type { ComponentConfig, RagComponent } from '../api/types'
 import { SchemaFormItems } from '../components/SchemaFormItems'
+import { TableActionButton } from '../components/TableActionButton'
 
 function statusColor(status: string) {
   if (status === 'available') return 'green'
@@ -179,8 +180,8 @@ export default function ComponentConfigsPage({ nodeType }: { nodeType: string })
       title: '操作',
       render: (_, record) => (
         <Space>
-          <Button onClick={() => showEdit(record)}>编辑</Button>
-          <Button danger onClick={() => deleteConfig.mutate(record.config_id)}>删除</Button>
+          <TableActionButton onClick={() => showEdit(record)}>编辑</TableActionButton>
+          <TableActionButton danger onClick={() => deleteConfig.mutate(record.config_id)}>删除</TableActionButton>
         </Space>
       ),
     },

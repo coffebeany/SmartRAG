@@ -1,8 +1,9 @@
-import { App, Button, Card, Popconfirm, Progress, Space, Table, Tag, Typography } from 'antd'
+import { App, Card, Popconfirm, Progress, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { Link } from 'react-router-dom'
 import { useChunkRuns, useDeleteChunkRun } from '../api/hooks'
 import type { ChunkRun } from '../api/types'
+import { TableActionButton } from '../components/TableActionButton'
 
 export default function ChunkRunsPage() {
   const { message } = App.useApp()
@@ -41,7 +42,7 @@ export default function ChunkRunsPage() {
       render: (_, record) => (
         <Space>
           <Link to={`/build/chunk-runs/${record.run_id}`}>
-            <Button>查看详情</Button>
+            <TableActionButton>查看详情</TableActionButton>
           </Link>
           <Popconfirm
             title="删除分块任务"
@@ -51,9 +52,9 @@ export default function ChunkRunsPage() {
             okButtonProps={{ danger: true }}
             onConfirm={() => handleDelete(record.run_id)}
           >
-            <Button danger loading={deleteChunkRun.isPending}>
+            <TableActionButton danger loading={deleteChunkRun.isPending}>
               删除
-            </Button>
+            </TableActionButton>
           </Popconfirm>
         </Space>
       ),

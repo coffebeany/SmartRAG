@@ -50,7 +50,13 @@ def test_rag_component_registry_exposes_form_schema_and_install_hints() -> None:
 
     assert hyde is not None
     assert hyde.default_config["max_output_tokens"] == 512
-    assert hyde.config_schema["properties"]["model_id"]["title"] == "LLM 模型"
+    assert hyde.llm_config_mode == "agent_profile_required"
+    assert "model_id" not in hyde.config_schema["properties"]
+    assert hyde.config_schema["required"] == ["agent_id"]
+    pass_query = rag_component_registry.get("query_expansion", "pass_query_expansion")
+    assert pass_query is not None
+    assert pass_query.llm_config_mode == "none"
+    assert not {"model_id", "agent_id"}.intersection(pass_query.config_schema["properties"])
     assert cohere is not None
     assert "api_key" not in cohere.config_schema["properties"]
     assert cohere.secret_config_schema["required"] == ["api_key"]
@@ -59,9 +65,13 @@ def test_rag_component_registry_exposes_form_schema_and_install_hints() -> None:
     assert flashrank.optional_dependency_extra == "rag-rerank-local"
     assert tree_summarize is not None
     assert tree_summarize.default_config["max_output_tokens"] == 1024
+    assert tree_summarize.llm_config_mode == "agent_profile_required"
+    assert "model_id" not in tree_summarize.config_schema["properties"]
     assert llm_answer is not None
     assert llm_answer.requires_llm is True
     assert llm_answer.default_config["max_output_tokens"] == 1024
+    assert llm_answer.llm_config_mode == "agent_profile_required"
+    assert "model_id" not in llm_answer.config_schema["properties"]
     hybrid_rrf = rag_component_registry.get("retrieval", "hybrid_rrf")
     assert hybrid_rrf is not None
     assert {"bm25_top_k", "vectordb_top_k"}.issubset(hybrid_rrf.config_schema["properties"])
@@ -89,10 +99,18 @@ def test_component_config_masks_secret_and_reports_availability() -> None:
 
 
 def test_agent_query_expansion_prompt_is_template_plus_original_query() -> None:
-    rendered = _render_agent_prompt("请提炼核心问题。", "大语言模型的核心概念是什么？")
+    rendered = _render_agent_prompt(
+        "请提炼核心问题。",
+        "Generate diverse retrieval queries.\n\nQuery: 大语言模型的核心概念是什么？",
+        "大语言模型的核心概念是什么？",
+    )
 
-    assert rendered == "请提炼核心问题。\n\n用户原始提问：\n大语言模型的核心概念是什么？"
-    assert "Generate diverse retrieval queries" not in rendered
+    assert rendered == (
+        "请提炼核心问题。\n\n"
+        "用户原始提问：\n大语言模型的核心概念是什么？\n\n"
+        "当前节点输入：\nGenerate diverse retrieval queries.\n\nQuery: 大语言模型的核心概念是什么？"
+    )
+    assert "Generate diverse retrieval queries" in rendered
 
 
 def test_query_expansion_summary_separates_raw_output_from_display_queries() -> None:

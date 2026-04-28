@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useEvaluationReportItems, useEvaluationReportRun } from '../api/hooks'
 import type { EvaluationReportItem } from '../api/types'
+import { MetricScoreGrid } from '../components/MetricScoreGrid'
 
 function statusColor(status?: string) {
   if (status === 'completed') return 'green'
@@ -23,7 +24,7 @@ export default function EvaluationReportDetailPage() {
   const columns: ColumnsType<EvaluationReportItem> = [
     { title: '问题', dataIndex: 'question', width: 260 },
     { title: '回答', dataIndex: 'answer', width: 360, render: (value) => String(value ?? '') },
-    { title: '分数', dataIndex: 'scores', render: (value: Record<string, number>) => <Space wrap>{Object.entries(value ?? {}).map(([key, score]) => <Tag key={key}>{key}: {Number(score).toFixed(3)}</Tag>)}</Space> },
+    { title: '分数', dataIndex: 'scores', width: 300, render: (value: Record<string, number>) => <MetricScoreGrid scores={value} compact /> },
     { title: '上下文', dataIndex: 'contexts', render: (value: string[]) => value.length },
     { title: '延迟', dataIndex: 'latency_ms', render: (value) => value ? `${value} ms` : 'NA' },
     { title: '错误', dataIndex: 'error', ellipsis: true },
@@ -54,12 +55,7 @@ export default function EvaluationReportDetailPage() {
       )}
       {run.data && (
         <Card title="聚合指标">
-          <Space wrap>
-            {Object.entries(run.data.aggregate_scores ?? {}).map(([key, value]) => (
-              <Tag key={key}>{key}: {Number(value).toFixed(4)}</Tag>
-            ))}
-            {!Object.keys(run.data.aggregate_scores ?? {}).length ? <Typography.Text type="secondary">暂无分数</Typography.Text> : null}
-          </Space>
+          <MetricScoreGrid scores={run.data.aggregate_scores} />
         </Card>
       )}
       <Card title="样本明细">

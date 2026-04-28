@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCreateMaterialBatch, useDeleteMaterialBatch, useMaterialBatches, useUpdateMaterialBatch } from '../api/hooks'
 import type { MaterialBatch } from '../api/types'
+import { TableActionButton } from '../components/TableActionButton'
 
 export default function MaterialBatchesPage() {
   const { message } = App.useApp()
@@ -39,7 +40,7 @@ export default function MaterialBatchesPage() {
         title: '操作',
         render: (_, record) => (
           <Space>
-            <Button
+            <TableActionButton
               onClick={() => {
                 setEditingBatch(record)
                 editForm.setFieldsValue({
@@ -49,8 +50,8 @@ export default function MaterialBatchesPage() {
               }}
             >
               编辑
-            </Button>
-            <Button
+            </TableActionButton>
+            <TableActionButton
               danger
               onClick={() => {
                 setDeletingBatch(record)
@@ -58,7 +59,7 @@ export default function MaterialBatchesPage() {
               }}
             >
               删除
-            </Button>
+            </TableActionButton>
           </Space>
         ),
       },

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAgents, useComponentConfigs, useCreateRagFlow, useModels, useRagComponents, useRagFlows, useUpdateRagFlow, useVectorRuns } from '../api/hooks'
 import type { AgentProfile, ModelConnection, RagComponent, RagFlowNode } from '../api/types'
 import { SchemaFormItems } from '../components/SchemaFormItems'
+import { TableActionButton } from '../components/TableActionButton'
 
 const NODE_TYPES = [
   { value: 'query_expansion', label: 'Query Expansion' },
@@ -41,19 +42,33 @@ function stripEmpty(value: Record<string, unknown> | undefined) {
   return Object.fromEntries(Object.entries(value ?? {}).filter(([, item]) => item !== undefined && item !== ''))
 }
 
-function hasLLMChoice(models: ModelConnection[] | undefined, agents: AgentProfile[] | undefined) {
-  return Boolean((models ?? []).some((model) => model.enabled && model.model_category !== 'embedding') || (agents ?? []).some((agent) => agent.enabled))
+function hasModelChoice(models: ModelConnection[] | undefined) {
+  return Boolean((models ?? []).some((model) => model.enabled && model.model_category !== 'embedding'))
+}
+
+function hasAgentChoice(agents: AgentProfile[] | undefined) {
+  return Boolean((agents ?? []).some((agent) => agent.enabled))
+}
+
+function llmConfigAvailable(component: RagComponent, models: ModelConnection[] | undefined, agents: AgentProfile[] | undefined) {
+  if (component.llm_config_mode === 'model_only') return hasModelChoice(models)
+  if (component.llm_config_mode === 'agent_profile_required') return hasAgentChoice(agents)
+  return true
 }
 
 function isSelectable(component: RagComponent, models: ModelConnection[] | undefined, agents: AgentProfile[] | undefined) {
   if (['missing_dependency', 'adapter_only'].includes(component.availability_status)) return false
-  if (component.requires_llm && !hasLLMChoice(models, agents)) return false
+  if (!llmConfigAvailable(component, models, agents)) return false
   return true
 }
 
 function moduleOption(component: RagComponent, models: ModelConnection[] | undefined, agents: AgentProfile[] | undefined) {
   const disabled = !isSelectable(component, models, agents)
-  const reason = component.requires_llm && !hasLLMChoice(models, agents) ? '需要先配置 LLM 或 Agent' : component.availability_reason
+  const reason = !llmConfigAvailable(component, models, agents)
+    ? component.llm_config_mode === 'agent_profile_required'
+      ? '需要先配置可用 Agent Profile'
+      : '需要先配置可用 LLM'
+    : component.availability_reason
   return {
     value: component.module_type,
     disabled,
@@ -66,6 +81,19 @@ function moduleOption(component: RagComponent, models: ModelConnection[] | undef
       </Tooltip>
     ),
   }
+}
+
+function cleanConfigForComponent(config: Record<string, unknown>, component?: RagComponent) {
+  const next = { ...config }
+  if (!component || component.llm_config_mode === 'none') {
+    delete next.model_id
+    delete next.agent_id
+  } else if (component.llm_config_mode === 'model_only') {
+    delete next.agent_id
+  } else if (component.llm_config_mode === 'agent_profile_required') {
+    delete next.model_id
+  }
+  return next
 }
 
 function NodeConfigForm({
@@ -210,7 +238,8 @@ export default function RagFlowBuilderPage() {
       const component = components.data?.find((item) => item.node_type === node.node_type && item.module_type === node.module_type)
       if (!component) return `未知节点：${node.node_type}/${node.module_type}`
       if (!isSelectable(component, models.data, agents.data)) return `${component.display_name} 当前不可用：${component.availability_reason}`
-      if (component.requires_llm && !node.config.model_id && !node.config.agent_id) return `${component.display_name} 需要选择 LLM 或 Agent`
+      if (component.llm_config_mode === 'model_only' && !node.config.model_id) return `${component.display_name} 需要选择 LLM`
+      if (component.llm_config_mode === 'agent_profile_required' && !node.config.agent_id) return `${component.display_name} 需要选择 Agent Profile`
       if (component.requires_api_key && !node.component_config_id) return `${component.display_name} 需要选择组件配置以提供 API key`
     }
     const retrievalComponent = components.data?.find((item) => item.node_type === retrievalNode.node_type && item.module_type === retrievalNode.module_type)
@@ -229,16 +258,27 @@ export default function RagFlowBuilderPage() {
       message.error(error)
       return
     }
+    const normalizedRetrievalNode = {
+      ...retrievalNode,
+      config: cleanConfigForComponent(
+        retrievalNode.config,
+        components.data?.find((item) => item.node_type === retrievalNode.node_type && item.module_type === retrievalNode.module_type),
+      ),
+    }
+    const normalizedNodes = nodes.map((node) => {
+      const component = components.data?.find((item) => item.node_type === node.node_type && item.module_type === node.module_type)
+      return { ...node, config: cleanConfigForComponent(node.config, component) }
+    })
     const payload = {
       flow_name: flowName,
       description,
       vector_run_id: vectorRunId,
-      retrieval_config: { top_k: Number(retrievalNode.config.top_k ?? 5) },
+      retrieval_config: { top_k: Number(normalizedRetrievalNode.config.top_k ?? 5) },
       nodes: [
-        ...nodes.filter((node) => node.node_type === 'query_expansion'),
-        retrievalNode,
-        ...nodes.filter((node) => node.node_type !== 'query_expansion' && node.node_type !== 'answer_generator'),
-        ...nodes.filter((node) => node.node_type === 'answer_generator'),
+        ...normalizedNodes.filter((node) => node.node_type === 'query_expansion'),
+        normalizedRetrievalNode,
+        ...normalizedNodes.filter((node) => node.node_type !== 'query_expansion' && node.node_type !== 'answer_generator'),
+        ...normalizedNodes.filter((node) => node.node_type === 'answer_generator'),
       ],
       enabled: true,
     }
@@ -375,9 +415,10 @@ export default function RagFlowBuilderPage() {
                         onChange={(value) => updateNode(index, { component_config_id: value ?? null })}
                       />
                     )}
-                    <Button onClick={() => setNodes((prev) => prev.filter((_, nodeIndex) => nodeIndex !== index))}>删除</Button>
+                    <TableActionButton danger onClick={() => setNodes((prev) => prev.filter((_, nodeIndex) => nodeIndex !== index))}>删除</TableActionButton>
                   </Space>
-                  {selectedComponent?.requires_llm && !hasLLMChoice(models.data, agents.data) && <Alert type="warning" showIcon message="需要先在设置中配置可用 LLM 或 Agent Profile。" />}
+                  {selectedComponent?.llm_config_mode === 'agent_profile_required' && !hasAgentChoice(agents.data) && <Alert type="warning" showIcon message="需要先在配置中创建可用 Agent Profile。" />}
+                  {selectedComponent?.llm_config_mode === 'model_only' && !hasModelChoice(models.data) && <Alert type="warning" showIcon message="需要先在配置中创建可用 LLM。" />}
                   {selectedComponent?.requires_api_key && !node.component_config_id && <Alert type="warning" showIcon message="该模块需要在组件配置中保存 API key，并在这里选择对应配置。" />}
                   <NodeConfigForm
                     node={node}

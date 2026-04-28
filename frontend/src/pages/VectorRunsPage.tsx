@@ -1,8 +1,9 @@
-import { Button, Popconfirm, Progress, Space, Table, Tag, Typography } from 'antd'
+import { Popconfirm, Progress, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { Link } from 'react-router-dom'
 import { useDeleteVectorRun, useVectorRuns } from '../api/hooks'
 import type { VectorRun } from '../api/types'
+import { TableActionButton } from '../components/TableActionButton'
 
 export default function VectorRunsPage() {
   const runs = useVectorRuns()
@@ -34,11 +35,11 @@ export default function VectorRunsPage() {
       title: '操作',
       render: (_, record) => (
         <Space>
-          <Link to={`/build/vector-runs/${record.run_id}`}>详情</Link>
+          <Link className="tableActionLink" to={`/build/vector-runs/${record.run_id}`}>详情</Link>
           <Popconfirm title="删除任务并同步删除外部 collection？" onConfirm={() => deleteVectorRun.mutate(record.run_id)}>
-            <Button danger loading={deleteVectorRun.isPending}>
+            <TableActionButton danger loading={deleteVectorRun.isPending}>
               删除
-            </Button>
+            </TableActionButton>
           </Popconfirm>
         </Space>
       ),

@@ -30,6 +30,7 @@ class RagComponentSpec:
     required_dependencies: tuple[str, ...] = ()
     required_env_vars: tuple[str, ...] = ()
     requires_llm: bool = False
+    llm_config_mode: str = "none"
     requires_embedding: bool = False
     requires_api_key: bool = False
     optional_dependency_extra: str | None = None
@@ -51,7 +52,11 @@ class RagComponentSpec:
             return ComponentAvailability("missing_dependency", f"Missing Python dependencies: {', '.join(missing_deps)}")
         if self.requires_api_key and not has_secret:
             return ComponentAvailability("needs_config", "API key is required.")
-        if self.requires_llm and not ((config or {}).get("model_id") or (config or {}).get("agent_id")):
+        if self.llm_config_mode == "model_only" and not (config or {}).get("model_id"):
+            return ComponentAvailability("needs_config", "LLM model_id is required.")
+        if self.llm_config_mode == "agent_profile_required" and not (config or {}).get("agent_id"):
+            return ComponentAvailability("needs_config", "Agent Profile is required.")
+        if self.requires_llm and self.llm_config_mode == "none" and not ((config or {}).get("model_id") or (config or {}).get("agent_id")):
             return ComponentAvailability("needs_config", "LLM model_id or agent_id is required.")
         if self.requires_embedding and not (config or {}).get("embedding_model_id"):
             return ComponentAvailability("needs_config", "Embedding model_id is required.")
@@ -191,12 +196,13 @@ for name, display, properties, defaults in [
         )
     )
 
-for name, display, requires_llm in [
-    ("pass_query_expansion", "Pass Query Expansion", False),
-    ("query_decompose", "Query Decompose", True),
-    ("hyde", "HyDE", True),
-    ("multi_query_expansion", "Multi Query Expansion", True),
+for name, display, llm_config_mode in [
+    ("pass_query_expansion", "Pass Query Expansion", "none"),
+    ("query_decompose", "Query Decompose", "agent_profile_required"),
+    ("hyde", "HyDE", "agent_profile_required"),
+    ("multi_query_expansion", "Multi Query Expansion", "agent_profile_required"),
 ]:
+    uses_agent = llm_config_mode == "agent_profile_required"
     rag_component_registry.register(
         RagComponentSpec(
             node_type="query_expansion",
@@ -206,7 +212,6 @@ for name, display, requires_llm in [
             capabilities=("query_expansion", "pre_retrieval", "autorag"),
             config_schema=schema(
                 {
-                    "model_id": {"type": "string", "title": "LLM 模型"},
                     "agent_id": {"type": "string", "title": "Agent Profile"},
                     "temperature": {"type": "number", "title": "Temperature", "minimum": 0, "maximum": 2},
                     "max_output_tokens": {
@@ -216,10 +221,12 @@ for name, display, requires_llm in [
                         "maximum": 32768,
                         "description": "Query Expansion 输出预算，默认 512，避免扩展 query 被过早截断。",
                     },
-                }
-            ),
-            default_config={"temperature": 0, "max_output_tokens": 512} if requires_llm else {},
-            requires_llm=requires_llm,
+                },
+                required=["agent_id"],
+            ) if uses_agent else schema({}),
+            default_config={"temperature": 0, "max_output_tokens": 512} if uses_agent else {},
+            requires_llm=uses_agent,
+            llm_config_mode=llm_config_mode,
         )
     )
 
@@ -306,14 +313,15 @@ rag_component_registry.register(
         capabilities=("passage_reranker", "llm", "autorag"),
         config_schema=schema(
             {
-                "model_id": {"type": "string", "title": "LLM 模型"},
                 "agent_id": {"type": "string", "title": "Agent Profile"},
                 "top_k": {"type": "integer", "title": "Top K", "minimum": 1},
                 "temperature": {"type": "number", "title": "Temperature", "minimum": 0, "maximum": 2},
-            }
+            },
+            required=["agent_id"],
         ),
         default_config={"top_k": 5, "temperature": 0},
         requires_llm=True,
+        llm_config_mode="agent_profile_required",
     )
 )
 
@@ -386,6 +394,7 @@ for name, display, requires_llm, executable in [
     ("refine", "Refine", True, True),
     ("longllmlingua", "LongLLMLingua", False, False),
 ]:
+    uses_agent = name in {"tree_summarize", "refine"}
     rag_component_registry.register(
         RagComponentSpec(
             node_type="passage_compressor",
@@ -395,8 +404,7 @@ for name, display, requires_llm, executable in [
             capabilities=("passage_compressor", "autorag"),
             config_schema=schema(
                 {
-                    "model_id": {"type": "string", "title": "LLM 模型"},
-                    "agent_id": {"type": "string", "title": "Agent Profile"},
+                    **({"agent_id": {"type": "string", "title": "Agent Profile"}} if uses_agent else {}),
                     "max_output_tokens": {
                         "type": "integer",
                         "title": "Max output tokens",
@@ -405,10 +413,12 @@ for name, display, requires_llm, executable in [
                         "description": "Compressor 输出预算，默认 1024，保留压缩后的事实密度。",
                     },
                     "target_chars": {"type": "integer", "title": "目标字符数", "minimum": 100},
-                }
+                },
+                required=["agent_id"] if uses_agent else [],
             ),
             default_config={"max_output_tokens": 1024, "target_chars": 700} if requires_llm else {},
             requires_llm=requires_llm,
+            llm_config_mode="agent_profile_required" if uses_agent else "none",
             executable=executable,
             required_dependencies=("llmlingua",) if name == "longllmlingua" else (),
             optional_dependency_extra="rag-compress" if name == "longllmlingua" else None,
@@ -424,18 +434,17 @@ rag_component_registry.register(
         capabilities=("answer_generation", "llm", "ragas"),
         config_schema=schema(
             {
-                "model_id": {"type": "string", "title": "LLM 模型"},
                 "agent_id": {"type": "string", "title": "Agent Profile"},
                 "temperature": {"type": "number", "title": "Temperature", "minimum": 0, "maximum": 2},
                 "max_output_tokens": {"type": "integer", "title": "Max output tokens", "minimum": 64, "maximum": 32768},
-                "system_prompt": {"type": "string", "title": "System Prompt"},
-            }
+            },
+            required=["agent_id"],
         ),
         default_config={
             "temperature": 0,
             "max_output_tokens": 1024,
-            "system_prompt": "请仅基于给定上下文回答问题。若上下文不足，请明确说明无法从材料中确定。",
         },
         requires_llm=True,
+        llm_config_mode="agent_profile_required",
     )
 )

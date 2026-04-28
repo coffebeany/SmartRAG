@@ -12,6 +12,8 @@ import {
   useVectorRuns,
 } from '../api/hooks'
 import type { EvaluationDatasetRun, EvaluationReportRun, RagFlow } from '../api/types'
+import { MetricScoreGrid } from '../components/MetricScoreGrid'
+import { TableActionButton } from '../components/TableActionButton'
 
 function statusColor(status: string) {
   if (status === 'completed') return 'green'
@@ -48,6 +50,12 @@ export default function EvaluationReportsPage() {
   const datasetOptions = (datasets.data ?? [])
     .filter((run: EvaluationDatasetRun) => run.status === 'completed' && (!selectedVector || run.chunk_run_id === selectedVector.chunk_run_id))
     .map((run) => ({ value: run.run_id, label: `${run.batch_name ?? run.batch_id} / ${run.completed_items} samples / ${run.framework_id}` }))
+  const metricOptions = ['retrieval', 'retrieval_id', 'generation'].map((category) => ({
+    label: category === 'retrieval_id' ? 'Chunk ID Retrieval' : category,
+    options: (framework?.metrics ?? [])
+      .filter((metric) => metric.category === category)
+      .map((metric) => ({ value: metric.metric_id, label: `${metric.display_name} (${metric.metric_id})` })),
+  })).filter((group) => group.options.length)
 
   useEffect(() => {
     const current = form.getFieldValue('metric_ids')
@@ -80,13 +88,13 @@ export default function EvaluationReportsPage() {
     { title: '框架', dataIndex: 'framework_id', render: (value) => <Tag>{String(value)}</Tag> },
     { title: '状态', dataIndex: 'status', render: (value) => <Tag color={statusColor(String(value))}>{String(value)}</Tag> },
     { title: '进度', render: (_, record) => <Progress size="small" percent={progress(record)} format={() => `${record.completed_items}/${record.total_items}`} /> },
-    { title: '指标', dataIndex: 'aggregate_scores', render: (value: Record<string, number>) => <Space wrap>{Object.entries(value ?? {}).map(([key, score]) => <Tag key={key}>{key}: {Number(score).toFixed(3)}</Tag>)}</Space> },
+    { title: '指标', dataIndex: 'aggregate_scores', width: 360, render: (value: Record<string, number>) => <MetricScoreGrid scores={value} compact /> },
     {
       title: '操作',
       width: 170,
       render: (_, record) => (
         <Space>
-          <Link to={`/build/evaluation-reports/${record.run_id}`}>查看</Link>
+          <Link className="tableActionLink" to={`/build/evaluation-reports/${record.run_id}`}>查看</Link>
           <Popconfirm
             title="删除测评报告"
             description="会同步删除报告明细和该报告产生的流程执行记录。"
@@ -98,7 +106,7 @@ export default function EvaluationReportsPage() {
               onError: (error) => message.error(error instanceof Error ? error.message : '删除失败'),
             })}
           >
-            <Button danger size="small" disabled={['pending', 'running'].includes(record.status)} loading={deleteReport.isPending}>删除</Button>
+            <TableActionButton danger disabled={['pending', 'running'].includes(record.status)} loading={deleteReport.isPending}>删除</TableActionButton>
           </Popconfirm>
         </Space>
       ),
@@ -143,7 +151,7 @@ export default function EvaluationReportsPage() {
             <Select options={datasetOptions} />
           </Form.Item>
           <Form.Item name="metric_ids" label="指标" rules={[{ required: true }]}>
-            <Select mode="multiple" options={(framework?.metrics ?? []).map((metric) => ({ value: metric.metric_id, label: `${metric.display_name} (${metric.category})` }))} />
+            <Select mode="multiple" options={metricOptions} />
           </Form.Item>
           <Button type="primary" loading={createReport.isPending} onClick={submit}>创建测评报告</Button>
         </Form>

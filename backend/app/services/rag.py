@@ -82,6 +82,7 @@ def _component_out(spec: RagComponentSpec) -> RagComponentOut:
         required_dependencies=list(spec.required_dependencies),
         required_env_vars=list(spec.required_env_vars),
         requires_llm=spec.requires_llm,
+        llm_config_mode=spec.llm_config_mode,
         requires_embedding=spec.requires_embedding,
         requires_api_key=spec.requires_api_key,
         dependency_install_hint=install_hint,
@@ -373,7 +374,7 @@ async def _run_prompt(
         model = await session.get(ModelConnection, agent.model_id)
         if not model:
             raise ValueError("Agent model is unavailable")
-        rendered = _render_agent_prompt(agent.prompt_template, query)
+        rendered = _render_agent_prompt(agent.prompt_template, prompt, query)
         runtime = dict(agent.runtime_config or {}) | config
     else:
         model_id = config.get("model_id")
@@ -403,8 +404,8 @@ async def _run_prompt(
     return result.text or ""
 
 
-def _render_agent_prompt(template: str, query: str) -> str:
-    return f"{template.strip()}\n\n用户原始提问：\n{query}"
+def _render_agent_prompt(template: str, prompt: str, query: str) -> str:
+    return f"{template.strip()}\n\n用户原始提问：\n{query}\n\n当前节点输入：\n{prompt}"
 
 
 def _split_queries(text: str, fallback: str) -> list[str]:

@@ -47,12 +47,19 @@ export default function RagFlowExperiencePage() {
       <Card>
         <Space direction="vertical" size={12} className="fullWidth">
           <Select
+            className="wideFlowSelect"
+            popupClassName="wideFlowSelectPopup"
             placeholder="选择流程"
             value={flowId}
             onChange={setFlowId}
             options={(flows.data ?? []).map((flow) => ({
               value: flow.flow_id,
-              label: `${flow.flow_name} / ${flow.batch_name ?? flow.vector_run_id}`,
+              label: (
+                <div className="flowSelectOption">
+                  <strong>{flow.flow_name}</strong>
+                  <span className="flowSelectMeta">{flow.batch_name ?? flow.vector_run_id} / {flow.vectordb_name ?? 'VectorDB'}</span>
+                </div>
+              ),
             }))}
           />
           {selectedFlow && (

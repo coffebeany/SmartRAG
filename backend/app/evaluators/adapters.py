@@ -259,6 +259,45 @@ def _bind_ragas_models(metrics: list[Any], *, llm: Any, embeddings: Any) -> None
             metric.embeddings = embeddings
 
 
+RAGAS_METRIC_IDS = {"context_precision", "context_recall", "faithfulness", "answer_relevancy"}
+SOURCE_CHUNK_HIT_PREFIX = "source_chunk_hit@"
+SOURCE_CHUNK_METRIC_IDS = {
+    "source_chunk_hit@3",
+    "source_chunk_hit@5",
+    "source_chunk_hit@10",
+    "source_chunk_recall",
+    "source_chunk_mrr",
+    "source_chunk_rank",
+}
+
+
+def _source_chunk_scores(record: dict[str, Any], metric_ids: set[str]) -> dict[str, float]:
+    source_ids = {str(item) for item in record.get("source_chunk_ids") or [] if item}
+    retrieved_ids = [str(item) for item in record.get("retrieved_chunk_ids") or [] if item]
+    if not source_ids:
+        return {}
+
+    scores: dict[str, float] = {}
+    for metric_id in metric_ids:
+        if metric_id.startswith(SOURCE_CHUNK_HIT_PREFIX):
+            try:
+                top_k = int(metric_id.removeprefix(SOURCE_CHUNK_HIT_PREFIX))
+            except ValueError:
+                continue
+            scores[metric_id] = 1.0 if source_ids.intersection(retrieved_ids[:top_k]) else 0.0
+
+    retrieved_source_ids = source_ids.intersection(retrieved_ids)
+    if "source_chunk_recall" in metric_ids:
+        scores["source_chunk_recall"] = len(retrieved_source_ids) / len(source_ids)
+
+    first_rank = next((index + 1 for index, chunk_id in enumerate(retrieved_ids) if chunk_id in source_ids), None)
+    if "source_chunk_mrr" in metric_ids:
+        scores["source_chunk_mrr"] = 1.0 / first_rank if first_rank else 0.0
+    if "source_chunk_rank" in metric_ids and first_rank:
+        scores["source_chunk_rank"] = float(first_rank)
+    return scores
+
+
 class RagasAdapter:
     framework_id = "ragas"
 
@@ -346,44 +385,54 @@ class RagasAdapter:
             "faithfulness": faithfulness,
             "answer_relevancy": answer_relevancy,
         }
-        selected = _fresh_ragas_metrics(metric_ids, metric_map)
-        dataset = Dataset.from_list(
-            [
-                {
-                    "question": item["question"],
-                    "answer": item.get("answer") or "",
-                    "contexts": item.get("contexts") or [],
-                    "ground_truth": item.get("ground_truth") or "",
-                }
-                for item in records
-            ]
-        )
-        if not selected:
-            raise RuntimeError("No supported RAGAS metrics selected.")
-        if judge_llm_model is None:
-            raise RuntimeError("judge_llm_model_id is required for RAGAS evaluation.")
-        ragas_llm = _ragas_llm_for_model(judge_llm_model)
-        ragas_embeddings = _ragas_embeddings_for_model(embedding_model)
-        _bind_ragas_models(selected, llm=ragas_llm, embeddings=ragas_embeddings)
-        result = await aevaluate(
-            dataset,
-            metrics=selected,
-            llm=ragas_llm,
-            embeddings=ragas_embeddings,
-            show_progress=False,
-            raise_exceptions=False,
-        )
-        table = result.to_pandas().to_dict(orient="records")
-        item_scores: list[dict[str, float]] = []
-        for row in table:
-            scores: dict[str, float] = {}
-            for key, value in row.items():
-                if key not in metric_ids or value is None:
-                    continue
-                score = float(value)
-                if math.isfinite(score):
-                    scores[key] = score
-            item_scores.append(scores)
+        requested_ids = set(metric_ids)
+        ragas_metric_ids = [metric_id for metric_id in metric_ids if metric_id in RAGAS_METRIC_IDS]
+        source_metric_ids = requested_ids.intersection(SOURCE_CHUNK_METRIC_IDS)
+        unsupported_ids = requested_ids.difference(RAGAS_METRIC_IDS).difference(SOURCE_CHUNK_METRIC_IDS)
+        if unsupported_ids:
+            raise RuntimeError(f"Unsupported evaluation metrics selected: {', '.join(sorted(unsupported_ids))}")
+
+        item_scores: list[dict[str, float]] = [{} for _ in records]
+        if ragas_metric_ids:
+            selected = _fresh_ragas_metrics(ragas_metric_ids, metric_map)
+            dataset = Dataset.from_list(
+                [
+                    {
+                        "question": item["question"],
+                        "answer": item.get("answer") or "",
+                        "contexts": item.get("contexts") or [],
+                        "ground_truth": item.get("ground_truth") or "",
+                    }
+                    for item in records
+                ]
+            )
+            if not selected:
+                raise RuntimeError("No supported RAGAS metrics selected.")
+            if judge_llm_model is None:
+                raise RuntimeError("judge_llm_model_id is required for RAGAS evaluation.")
+            ragas_llm = _ragas_llm_for_model(judge_llm_model)
+            ragas_embeddings = _ragas_embeddings_for_model(embedding_model)
+            _bind_ragas_models(selected, llm=ragas_llm, embeddings=ragas_embeddings)
+            result = await aevaluate(
+                dataset,
+                metrics=selected,
+                llm=ragas_llm,
+                embeddings=ragas_embeddings,
+                show_progress=False,
+                raise_exceptions=False,
+            )
+            table = result.to_pandas().to_dict(orient="records")
+            for index, row in enumerate(table):
+                for key, value in row.items():
+                    if key not in ragas_metric_ids or value is None:
+                        continue
+                    score = float(value)
+                    if math.isfinite(score):
+                        item_scores[index][key] = score
+
+        for index, record in enumerate(records):
+            item_scores[index].update(_source_chunk_scores(record, source_metric_ids))
+
         aggregate: dict[str, float] = {}
         for metric_id in metric_ids:
             values = [scores[metric_id] for scores in item_scores if metric_id in scores]

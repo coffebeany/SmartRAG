@@ -519,6 +519,8 @@ async def execute_evaluation_report_run(run_id: str) -> None:
                             "answer": rag_run.answer,
                             "contexts": contexts,
                             "ground_truth": dataset_item.ground_truth,
+                            "source_chunk_ids": dataset_item.source_chunk_ids,
+                            "retrieved_chunk_ids": chunk_ids,
                         }
                     )
                     session.add(report_item)

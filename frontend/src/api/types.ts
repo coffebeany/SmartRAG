@@ -259,6 +259,7 @@ export interface RagComponent {
   required_dependencies: string[]
   required_env_vars: string[]
   requires_llm: boolean
+  llm_config_mode: 'none' | 'model_only' | 'agent_profile_required'
   requires_embedding: boolean
   requires_api_key: boolean
   dependency_install_hint?: string | null

@@ -49,7 +49,10 @@ export default function EvaluationReportsPage() {
   const selectedVector = (vectorRuns.data ?? []).find((run) => run.run_id === selectedFlow?.vector_run_id)
   const datasetOptions = (datasets.data ?? [])
     .filter((run: EvaluationDatasetRun) => run.status === 'completed' && (!selectedVector || run.chunk_run_id === selectedVector.chunk_run_id))
-    .map((run) => ({ value: run.run_id, label: `${run.batch_name ?? run.batch_id} / ${run.completed_items} samples / ${run.framework_id}` }))
+    .map((run) => ({
+      value: run.run_id,
+      label: run.display_name ?? `${run.batch_name ?? run.batch_id} / ${run.completed_items} samples / ${run.framework_id} / ${run.run_id.slice(0, 8)}`,
+    }))
   const metricOptions = ['retrieval', 'retrieval_id', 'generation'].map((category) => ({
     label: category === 'retrieval_id' ? 'Chunk ID Retrieval' : category,
     options: (framework?.metrics ?? [])
@@ -148,7 +151,7 @@ export default function EvaluationReportsPage() {
           </Form.Item>
           {selectedFlow && !hasAnswerGenerator(selectedFlow) ? <Alert type="warning" showIcon message="该流程需要先在流程构建中增加 answer_generator 节点。" /> : null}
           <Form.Item name="dataset_run_id" label="测评集" rules={[{ required: true }]}>
-            <Select options={datasetOptions} />
+            <Select showSearch optionFilterProp="label" popupMatchSelectWidth={520} options={datasetOptions} />
           </Form.Item>
           <Form.Item name="metric_ids" label="指标" rules={[{ required: true }]}>
             <Select mode="multiple" options={metricOptions} />

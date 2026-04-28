@@ -345,6 +345,7 @@ export interface EvaluationFramework {
 
 export interface EvaluationDatasetRun {
   run_id: string
+  display_name?: string | null
   batch_id: string
   chunk_run_id: string
   framework_id: string

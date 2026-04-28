@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -5,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.schemas.evaluations import ParseEvaluationRunCreate
 from app.services.evaluations import (
+    _dataset_run_display_name,
     _merge_generator_config,
     create_parse_evaluation_run,
     list_evaluation_frameworks,
@@ -111,6 +114,30 @@ def test_generator_config_merges_defaults_and_advanced_config() -> None:
     assert merged["chunk_sampling"]["mode"] == "all_completed_chunks"
     assert merged["chunk_sampling"]["max_chunks"] == 30
     assert merged["advanced_config"] == {"transforms": ["headline"]}
+
+
+def test_dataset_run_display_name_includes_distinguishing_config() -> None:
+    row = SimpleNamespace(
+        run_id="12345678-90ab-cdef",
+        batch_id="batch-1",
+        batch=SimpleNamespace(batch_name="合同资料"),
+        framework_id="ragas",
+        generator_config={
+            "testset_size": 20,
+            "language": "zh",
+            "chunk_sampling": {"max_chunks": 30},
+        },
+        stats={"selected_chunks": 12},
+        total_items=20,
+    )
+
+    display_name = _dataset_run_display_name(row)
+
+    assert "合同资料" in display_name
+    assert "20样本" in display_name
+    assert "zh" in display_name
+    assert "chunks:12" in display_name
+    assert "12345678" in display_name
 
 
 def test_ragas_embedding_adapter_requires_explicit_model() -> None:

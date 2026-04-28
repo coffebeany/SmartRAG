@@ -62,6 +62,7 @@ class EvaluationDatasetRunOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     run_id: str
+    display_name: str | None = None
     batch_id: str
     chunk_run_id: str
     framework_id: str
@@ -95,6 +96,26 @@ class EvaluationDatasetItemOut(BaseModel):
     synthesizer_name: str | None = None
     item_metadata: dict
     created_at: datetime
+
+
+class EvaluationDatasetItemCreate(BaseModel):
+    question: str = Field(min_length=1)
+    ground_truth: str = Field(min_length=1)
+    reference_contexts: list[str] = Field(default_factory=list)
+    source_chunk_ids: list[str] = Field(default_factory=list)
+    source_file_ids: list[str] = Field(default_factory=list)
+    synthesizer_name: str | None = "manual"
+    item_metadata: dict = Field(default_factory=dict)
+
+
+class EvaluationDatasetItemUpdate(BaseModel):
+    question: str | None = Field(default=None, min_length=1)
+    ground_truth: str | None = Field(default=None, min_length=1)
+    reference_contexts: list[str] | None = None
+    source_chunk_ids: list[str] | None = None
+    source_file_ids: list[str] | None = None
+    synthesizer_name: str | None = None
+    item_metadata: dict | None = None
 
 
 class EvaluationDatasetItemsPageOut(BaseModel):

@@ -664,6 +664,37 @@ export function useEvaluationDatasetItems(runId?: string, offset = 0, limit = 50
   })
 }
 
+function invalidateEvaluationDatasetItemQueries(queryClient: ReturnType<typeof useQueryClient>, runId?: string) {
+  queryClient.invalidateQueries({ queryKey: ['evaluation-dataset-runs'] })
+  queryClient.invalidateQueries({ queryKey: ['evaluation-dataset-run', runId] })
+  queryClient.invalidateQueries({ queryKey: ['evaluation-dataset-items', runId] })
+}
+
+export function useCreateEvaluationDatasetItem(runId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: unknown) => apiClient.post(`/evaluation-dataset-runs/${runId}/items`, payload),
+    onSuccess: () => invalidateEvaluationDatasetItemQueries(queryClient, runId),
+  })
+}
+
+export function useUpdateEvaluationDatasetItem(runId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ itemId, payload }: { itemId: string; payload: unknown }) =>
+      apiClient.patch(`/evaluation-dataset-runs/${runId}/items/${itemId}`, payload),
+    onSuccess: () => invalidateEvaluationDatasetItemQueries(queryClient, runId),
+  })
+}
+
+export function useDeleteEvaluationDatasetItem(runId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (itemId: string) => apiClient.delete(`/evaluation-dataset-runs/${runId}/items/${itemId}`),
+    onSuccess: () => invalidateEvaluationDatasetItemQueries(queryClient, runId),
+  })
+}
+
 export function useCreateEvaluationReportRun() {
   const queryClient = useQueryClient()
   return useMutation({

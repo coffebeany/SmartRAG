@@ -1,19 +1,14 @@
-import { Alert, App, Button, Card, Collapse, Form, Input, InputNumber, Popconfirm, Progress, Select, Space, Table, Tag, Typography } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
+import { Alert, App, Button, Card, Collapse, Form, Input, InputNumber, Select, Space, Typography } from 'antd'
 import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import {
   useChunkRuns,
   useCreateEvaluationDatasetRun,
-  useDeleteEvaluationDatasetRun,
-  useEvaluationDatasetRuns,
   useEvaluationFrameworks,
   useMaterialBatches,
   useModelDefaults,
   useModels,
 } from '../api/hooks'
-import type { ChunkRun, EvaluationDatasetRun } from '../api/types'
-import { TableActionButton } from '../components/TableActionButton'
+import type { ChunkRun } from '../api/types'
 
 function parseJson(text: string) {
   try {
@@ -21,19 +16,6 @@ function parseJson(text: string) {
   } catch {
     throw new Error('高级 JSON 格式不正确')
   }
-}
-
-function progress(run: EvaluationDatasetRun) {
-  const done = run.completed_items + run.failed_items
-  return run.total_items ? Math.round((done / run.total_items) * 100) : 0
-}
-
-function statusColor(status: string) {
-  if (status === 'completed') return 'green'
-  if (status === 'failed') return 'red'
-  if (status === 'completed_with_errors') return 'orange'
-  if (status === 'running') return 'blue'
-  return 'default'
 }
 
 export default function EvaluationDatasetsPage() {
@@ -44,9 +26,7 @@ export default function EvaluationDatasetsPage() {
   const models = useModels()
   const defaults = useModelDefaults()
   const frameworks = useEvaluationFrameworks()
-  const datasetRuns = useEvaluationDatasetRuns()
   const createRun = useCreateEvaluationDatasetRun()
-  const deleteRun = useDeleteEvaluationDatasetRun()
 
   const framework = (frameworks.data ?? []).find((item) => item.framework_id === (form.getFieldValue('framework_id') ?? 'ragas'))
   const selectedBatchId = Form.useWatch('batch_id', form)
@@ -102,37 +82,6 @@ export default function EvaluationDatasetsPage() {
       message.error(error instanceof Error ? error.message : '请检查配置')
     }
   }
-
-  const columns: ColumnsType<EvaluationDatasetRun> = [
-    { title: '任务', dataIndex: 'run_id', render: (value) => <Typography.Text code>{String(value).slice(0, 8)}</Typography.Text> },
-    { title: '批次', dataIndex: 'batch_name' },
-    { title: '框架', dataIndex: 'framework_id', render: (value) => <Tag>{String(value)}</Tag> },
-    { title: '状态', dataIndex: 'status', render: (value) => <Tag color={statusColor(String(value))}>{String(value)}</Tag> },
-    { title: '进度', render: (_, record) => <Progress size="small" percent={progress(record)} format={() => `${record.completed_items}/${record.total_items}`} /> },
-    { title: '错误', dataIndex: 'error_summary', ellipsis: true },
-    {
-      title: '操作',
-      width: 170,
-      render: (_, record) => (
-        <Space>
-          <Link className="tableActionLink" to={`/build/evaluation-datasets/${record.run_id}`}>查看</Link>
-          <Popconfirm
-            title="删除测评集"
-            description="会同步删除该测评集、样本明细及其关联测评报告。"
-            okText="删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => deleteRun.mutate(record.run_id, {
-              onSuccess: () => message.success('测评集已删除'),
-              onError: (error) => message.error(error instanceof Error ? error.message : '删除失败'),
-            })}
-          >
-            <TableActionButton danger disabled={['pending', 'running'].includes(record.status)} loading={deleteRun.isPending}>删除</TableActionButton>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ]
 
   return (
     <Space direction="vertical" size={16} className="pageStack">
@@ -214,9 +163,6 @@ export default function EvaluationDatasetsPage() {
           />
           <Button type="primary" loading={createRun.isPending} onClick={submit}>创建测评集任务</Button>
         </Form>
-      </Card>
-      <Card title="任务列表">
-        <Table rowKey="run_id" loading={datasetRuns.isLoading} columns={columns} dataSource={datasetRuns.data ?? []} />
       </Card>
     </Space>
   )

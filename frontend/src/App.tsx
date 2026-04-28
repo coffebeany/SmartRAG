@@ -19,6 +19,7 @@ import ChunkRunsPage from './pages/ChunkRunsPage'
 import ChunkStrategiesPage from './pages/ChunkStrategiesPage'
 import ComponentConfigsPage from './pages/ComponentConfigsPage'
 import EvaluationDatasetDetailPage from './pages/EvaluationDatasetDetailPage'
+import EvaluationDatasetRunsPage from './pages/EvaluationDatasetRunsPage'
 import EvaluationDatasetsPage from './pages/EvaluationDatasetsPage'
 import EvaluationReportDetailPage from './pages/EvaluationReportDetailPage'
 import EvaluationReportsPage from './pages/EvaluationReportsPage'
@@ -149,29 +150,21 @@ function ConfigWorkspace() {
 
 function BuildWorkspace() {
   const location = useLocation()
-  const selectedKey = location.pathname.includes('/chunk-compare')
-    ? '/build/chunk-compare'
-    : location.pathname.includes('/evaluation-reports')
-      ? '/build/evaluation-reports'
-      : location.pathname.includes('/evaluation-datasets')
-        ? '/build/evaluation-datasets'
-        : location.pathname.includes('/rag-experience')
-          ? '/build/rag-experience'
-          : location.pathname.includes('/rag-flows')
-            ? '/build/rag-flows'
-            : location.pathname.includes('/rag-flow-builder')
-              ? '/build/rag-flow-builder'
-              : location.pathname.includes('/vector-runs')
-                ? '/build/vector-runs'
-                : location.pathname.includes('/material-vector')
-                  ? '/build/material-vector'
-                  : location.pathname.includes('/chunk-runs')
-                    ? '/build/chunk-runs'
-                    : location.pathname.includes('/material-chunk')
-                      ? '/build/material-chunk'
-                      : location.pathname.includes('/parse-runs')
-                        ? '/build/parse-runs'
-                        : '/build/material-parse'
+  let selectedKey = '/build/material-parse'
+  if (location.pathname.includes('/parse-runs')) selectedKey = '/build/parse-runs'
+  if (location.pathname.includes('/material-chunk')) selectedKey = '/build/material-chunk'
+  if (location.pathname.includes('/chunk-runs')) selectedKey = '/build/chunk-runs'
+  if (location.pathname.includes('/material-vector')) selectedKey = '/build/material-vector'
+  if (location.pathname.includes('/vector-runs')) selectedKey = '/build/vector-runs'
+  if (location.pathname.includes('/rag-flow-builder')) selectedKey = '/build/rag-flow-builder'
+  if (location.pathname.includes('/rag-flows')) selectedKey = '/build/rag-flows'
+  if (location.pathname.includes('/rag-experience')) selectedKey = '/build/rag-experience'
+  if (location.pathname.includes('/evaluation-datasets')) selectedKey = '/build/evaluation-datasets'
+  if (location.pathname.includes('/evaluation-datasets/') || location.pathname.includes('/evaluation-dataset-runs')) {
+    selectedKey = '/build/evaluation-dataset-runs'
+  }
+  if (location.pathname.includes('/evaluation-reports')) selectedKey = '/build/evaluation-reports'
+  if (location.pathname.includes('/chunk-compare')) selectedKey = '/build/chunk-compare'
   const items: MenuProps['items'] = [
     {
       key: 'build-material-root',
@@ -210,6 +203,7 @@ function BuildWorkspace() {
       label: '测评',
       children: [
         { key: '/build/evaluation-datasets', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-datasets">测评集生成</Link> },
+        { key: '/build/evaluation-dataset-runs', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-dataset-runs">测评集任务</Link> },
         { key: '/build/evaluation-reports', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-reports">应用测评</Link> },
       ],
     },
@@ -246,6 +240,8 @@ function BuildWorkspace() {
           <Route path="rag-experience" element={<RagFlowExperiencePage />} />
           <Route path="evaluation-datasets" element={<EvaluationDatasetsPage />} />
           <Route path="evaluation-datasets/:runId" element={<EvaluationDatasetDetailPage />} />
+          <Route path="evaluation-dataset-runs" element={<EvaluationDatasetRunsPage />} />
+          <Route path="evaluation-dataset-runs/:runId" element={<EvaluationDatasetDetailPage />} />
           <Route path="evaluation-reports" element={<EvaluationReportsPage />} />
           <Route path="evaluation-reports/:runId" element={<EvaluationReportDetailPage />} />
         </Routes>

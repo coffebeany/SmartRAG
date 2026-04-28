@@ -5,6 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.schemas.evaluations import (
+    EvaluationDatasetItemCreate,
+    EvaluationDatasetItemOut,
+    EvaluationDatasetItemUpdate,
     EvaluationDatasetItemsPageOut,
     EvaluationDatasetRunCreate,
     EvaluationDatasetRunOut,
@@ -77,6 +80,41 @@ async def list_evaluation_dataset_items(
     session: AsyncSession = Depends(get_session),
 ) -> EvaluationDatasetItemsPageOut:
     return await evaluation_service.list_evaluation_dataset_items(session, run_id, offset, limit)
+
+
+@router.post(
+    "/evaluation-dataset-runs/{run_id}/items",
+    response_model=EvaluationDatasetItemOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_evaluation_dataset_item(
+    run_id: str,
+    payload: EvaluationDatasetItemCreate,
+    session: AsyncSession = Depends(get_session),
+) -> EvaluationDatasetItemOut:
+    return await evaluation_service.create_evaluation_dataset_item(session, run_id, payload)
+
+
+@router.patch(
+    "/evaluation-dataset-runs/{run_id}/items/{item_id}",
+    response_model=EvaluationDatasetItemOut,
+)
+async def update_evaluation_dataset_item(
+    run_id: str,
+    item_id: str,
+    payload: EvaluationDatasetItemUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> EvaluationDatasetItemOut:
+    return await evaluation_service.update_evaluation_dataset_item(session, run_id, item_id, payload)
+
+
+@router.delete("/evaluation-dataset-runs/{run_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_evaluation_dataset_item(
+    run_id: str,
+    item_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    await evaluation_service.delete_evaluation_dataset_item(session, run_id, item_id)
 
 
 @router.post("/evaluation-report-runs", response_model=EvaluationReportRunOut, status_code=status.HTTP_201_CREATED)

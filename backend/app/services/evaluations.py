@@ -31,7 +31,9 @@ from app.models.entities import (
     VectorRun,
 )
 from app.schemas.evaluations import (
+    EvaluationDatasetItemCreate,
     EvaluationDatasetItemOut,
+    EvaluationDatasetItemUpdate,
     EvaluationDatasetItemsPageOut,
     EvaluationDatasetRunCreate,
     EvaluationDatasetRunOut,
@@ -125,9 +127,24 @@ def _merge_generator_config(framework: EvaluationFrameworkSpec, config: dict[str
     return merged
 
 
+def _dataset_run_display_name(row: EvaluationDatasetRun) -> str:
+    config = row.generator_config or {}
+    stats = row.stats or {}
+    sampling = config.get("chunk_sampling") if isinstance(config.get("chunk_sampling"), dict) else {}
+    batch_name = row.batch.batch_name if row.batch else row.batch_id
+    language = str(config.get("language") or "unknown")
+    requested = int(config.get("testset_size") or stats.get("requested_items") or row.total_items or 0)
+    selected_chunks = stats.get("selected_chunks")
+    if selected_chunks is None:
+        selected_chunks = sampling.get("max_chunks") or "all"
+    run_suffix = row.run_id.split("-")[0] if row.run_id else ""
+    return f"{batch_name} / {row.framework_id.upper()} / {requested}样本 / {language} / chunks:{selected_chunks} / {run_suffix}"
+
+
 def _dataset_run_out(row: EvaluationDatasetRun) -> EvaluationDatasetRunOut:
     return EvaluationDatasetRunOut.model_validate(row, from_attributes=True).model_copy(
         update={
+            "display_name": _dataset_run_display_name(row),
             "batch_name": row.batch.batch_name if row.batch else None,
             "chunk_status": row.chunk_run.status if row.chunk_run else None,
         }
@@ -387,6 +404,102 @@ async def list_evaluation_dataset_items(
         offset=normalized_offset,
         limit=normalized_limit,
     )
+
+
+def _assert_dataset_items_editable(run: EvaluationDatasetRun) -> None:
+    if run.status in {"pending", "running"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot edit a running evaluation dataset task",
+        )
+
+
+async def _assert_no_active_dataset_report_runs(session: AsyncSession, run_id: str) -> None:
+    active_reports = await session.scalar(
+        select(func.count()).select_from(EvaluationReportRun).where(
+            EvaluationReportRun.dataset_run_id == run_id,
+            EvaluationReportRun.status.in_(("pending", "running")),
+        )
+    )
+    if active_reports:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot edit dataset items while evaluation reports are running",
+        )
+
+
+async def _get_evaluation_dataset_item(
+    session: AsyncSession, run_id: str, item_id: str
+) -> EvaluationDatasetItem:
+    row = await session.scalar(
+        select(EvaluationDatasetItem).where(
+            EvaluationDatasetItem.run_id == run_id,
+            EvaluationDatasetItem.item_id == item_id,
+        )
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation dataset item not found")
+    return row
+
+
+async def create_evaluation_dataset_item(
+    session: AsyncSession, run_id: str, payload: EvaluationDatasetItemCreate
+) -> EvaluationDatasetItemOut:
+    run = await get_evaluation_dataset_run_model(session, run_id)
+    _assert_dataset_items_editable(run)
+    await _assert_no_active_dataset_report_runs(session, run_id)
+    item_metadata = dict(payload.item_metadata or {})
+    item_metadata.setdefault("source", "manual")
+    row = EvaluationDatasetItem(
+        run_id=run_id,
+        question=payload.question,
+        ground_truth=payload.ground_truth,
+        reference_contexts=payload.reference_contexts,
+        source_chunk_ids=payload.source_chunk_ids,
+        source_file_ids=payload.source_file_ids,
+        synthesizer_name=payload.synthesizer_name or "manual",
+        item_metadata=item_metadata,
+    )
+    session.add(row)
+    run.total_items += 1
+    run.completed_items += 1
+    await session.commit()
+    await session.refresh(row)
+    return EvaluationDatasetItemOut.model_validate(row, from_attributes=True)
+
+
+async def update_evaluation_dataset_item(
+    session: AsyncSession, run_id: str, item_id: str, payload: EvaluationDatasetItemUpdate
+) -> EvaluationDatasetItemOut:
+    run = await get_evaluation_dataset_run_model(session, run_id)
+    _assert_dataset_items_editable(run)
+    await _assert_no_active_dataset_report_runs(session, run_id)
+    row = await _get_evaluation_dataset_item(session, run_id, item_id)
+    update = payload.model_dump(exclude_unset=True)
+    for key, value in update.items():
+        setattr(row, key, value)
+    await session.commit()
+    await session.refresh(row)
+    return EvaluationDatasetItemOut.model_validate(row, from_attributes=True)
+
+
+async def delete_evaluation_dataset_item(session: AsyncSession, run_id: str, item_id: str) -> None:
+    run = await get_evaluation_dataset_run_model(session, run_id)
+    _assert_dataset_items_editable(run)
+    await _assert_no_active_dataset_report_runs(session, run_id)
+    row = await _get_evaluation_dataset_item(session, run_id, item_id)
+    referenced = await session.scalar(
+        select(func.count()).select_from(EvaluationReportItem).where(EvaluationReportItem.dataset_item_id == item_id)
+    )
+    if referenced:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete dataset item referenced by evaluation reports. Delete related reports first.",
+        )
+    await session.delete(row)
+    run.total_items = max(run.total_items - 1, 0)
+    run.completed_items = max(run.completed_items - 1, 0)
+    await session.commit()
 
 
 def _flow_has_answer_generator(flow: RagFlow) -> bool:

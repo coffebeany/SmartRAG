@@ -24,11 +24,6 @@ export default function ParserStrategiesPage() {
   }
 
   const columns: ColumnsType<ParserStrategy> = [
-    {
-      title: '唯一名称',
-      dataIndex: 'parser_name',
-      render: (value) => <Typography.Text code>{value}</Typography.Text>,
-    },
     { title: '显示名称', dataIndex: 'display_name' },
     { title: '描述', dataIndex: 'description' },
     {
@@ -56,11 +51,6 @@ export default function ParserStrategiesPage() {
       title: '支持后缀',
       dataIndex: 'supported_file_exts',
       render: (value: string[]) => <Space wrap>{value.map((item) => <Tag key={item}>{item}</Tag>)}</Space>,
-    },
-    {
-      title: 'AutoRAG 模块',
-      dataIndex: 'autorag_module_type',
-      render: (value) => value && <Tag>{value}</Tag>,
     },
   ]
 

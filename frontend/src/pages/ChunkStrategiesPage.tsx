@@ -24,11 +24,6 @@ export default function ChunkStrategiesPage() {
   }
 
   const columns: ColumnsType<ChunkStrategy> = [
-    {
-      title: '唯一名称',
-      dataIndex: 'chunker_name',
-      render: (value) => <Typography.Text code>{value}</Typography.Text>,
-    },
     { title: '显示名称', dataIndex: 'display_name' },
     { title: '模块', dataIndex: 'module_type', render: (value) => <Tag>{value}</Tag> },
     { title: '方法', dataIndex: 'chunk_method' },

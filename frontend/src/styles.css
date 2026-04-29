@@ -333,14 +333,30 @@ body {
   width: 100%;
 }
 
+.wideFlowSelect .ant-select-selection-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wideFlowSelectPopup {
-  min-width: 520px !important;
+  width: min(520px, calc(100vw - 48px)) !important;
 }
 
 .flowSelectOption {
   display: grid;
   gap: 2px;
-  white-space: normal;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.flowSelectOption strong,
+.flowSelectMeta {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .flowSelectMeta {

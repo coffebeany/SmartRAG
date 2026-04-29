@@ -23,6 +23,11 @@ export default function RagFlowExperiencePage() {
 
   const selectedFlow = (flows.data ?? []).find((flow) => flow.flow_id === flowId)
   const selectedRetrieval = selectedFlow?.nodes.find((node) => node.node_type === 'retrieval')
+  const flowOptions = (flows.data ?? []).map((flow) => ({
+    value: flow.flow_id,
+    label: flow.flow_name,
+    meta: `${flow.batch_name ?? flow.vector_run_id} / ${flow.vectordb_name ?? 'VectorDB'}`,
+  }))
 
   const submit = () => {
     if (!flowId || !query.trim()) {
@@ -52,15 +57,16 @@ export default function RagFlowExperiencePage() {
             placeholder="选择流程"
             value={flowId}
             onChange={setFlowId}
-            options={(flows.data ?? []).map((flow) => ({
-              value: flow.flow_id,
-              label: (
+            options={flowOptions}
+            optionRender={(option) => {
+              const data = option.data as { label: string; meta: string }
+              return (
                 <div className="flowSelectOption">
-                  <strong>{flow.flow_name}</strong>
-                  <span className="flowSelectMeta">{flow.batch_name ?? flow.vector_run_id} / {flow.vectordb_name ?? 'VectorDB'}</span>
+                  <strong title={data.label}>{data.label}</strong>
+                  <span className="flowSelectMeta" title={data.meta}>{data.meta}</span>
                 </div>
-              ),
-            }))}
+              )
+            }}
           />
           {selectedFlow && (
             <Descriptions size="small" column={2}>

@@ -28,7 +28,6 @@ import MaterialBatchesPage from './pages/MaterialBatchesPage'
 import MaterialChunkPage from './pages/MaterialChunkPage'
 import MaterialParsePage from './pages/MaterialParsePage'
 import MaterialVectorPage from './pages/MaterialVectorPage'
-import ModelDefaultsPage from './pages/ModelDefaultsPage'
 import ModelsPage from './pages/ModelsPage'
 import ParserStrategiesPage from './pages/ParserStrategiesPage'
 import ParseRunDetailPage from './pages/ParseRunDetailPage'
@@ -271,9 +270,8 @@ function SettingsPage() {
         ? '/settings/components/filter'
         : location.pathname.includes('/components/compressor')
           ? '/settings/components/compressor'
-          : '/settings/model-defaults'
+          : '/settings/processing-rules'
   const items: MenuProps['items'] = [
-    { key: '/settings/model-defaults', icon: <SettingOutlined />, label: <Link to="/settings/model-defaults">默认模型</Link> },
     { key: '/settings/processing-rules', icon: <FileTextOutlined />, label: <Link to="/settings/processing-rules">默认处理规则</Link> },
     {
       key: 'component-root',
@@ -301,8 +299,7 @@ function SettingsPage() {
       </aside>
       <section className="workspaceContent">
         <Routes>
-          <Route index element={<Navigate to="/settings/model-defaults" replace />} />
-          <Route path="model-defaults" element={<ModelDefaultsPage />} />
+          <Route index element={<Navigate to="/settings/processing-rules" replace />} />
           <Route path="processing-rules" element={<ProcessingRulesPage />} />
           <Route path="components/rerank" element={<ComponentConfigsPage nodeType="passage_reranker" />} />
           <Route path="components/filter" element={<ComponentConfigsPage nodeType="passage_filter" />} />
@@ -351,7 +348,7 @@ function Shell() {
           <Route path="/settings/*" element={<SettingsPage />} />
           <Route path="/models" element={<Navigate to="/config/llm" replace />} />
           <Route path="/agents" element={<Navigate to="/config/agent" replace />} />
-          <Route path="/defaults" element={<Navigate to="/settings/model-defaults" replace />} />
+          <Route path="/defaults" element={<Navigate to="/settings/processing-rules" replace />} />
         </Routes>
       </Content>
       <BottomNav />

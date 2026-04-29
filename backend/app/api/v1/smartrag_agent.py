@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,10 +29,18 @@ async def get_agent_run(run_id: str, session: AsyncSession = Depends(get_session
     return await smartrag_agent.get_agent_run(session, run_id)
 
 
+@router.post("/smartrag-agent/runs/{run_id}/cancel", response_model=AgentRunOut)
+async def cancel_agent_run(run_id: str, session: AsyncSession = Depends(get_session)) -> AgentRunOut:
+    return await smartrag_agent.cancel_agent_run(session, run_id)
+
+
 @router.get("/smartrag-agent/runs/{run_id}/events")
-async def stream_agent_run_events(run_id: str) -> StreamingResponse:
+async def stream_agent_run_events(
+    run_id: str,
+    after_sequence: int = Query(default=0, ge=0),
+) -> StreamingResponse:
     return StreamingResponse(
-        smartrag_agent.iter_agent_events(run_id),
+        smartrag_agent.iter_agent_events(run_id, after_sequence=after_sequence),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

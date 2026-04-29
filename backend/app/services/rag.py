@@ -241,7 +241,19 @@ async def _validate_flow_payload(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vector run is not completed")
     retrieval_nodes = [node for node in nodes if node.get("enabled", True) and node.get("node_type") == "retrieval"]
     if len(retrieval_nodes) != 1:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="RAG flow requires exactly one retrieval node")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="RAG flow requires exactly one enabled retrieval node. Call get_rag_flow_build_guide and list_rag_components, then include one retrieval node such as module_type='vectordb'.",
+        )
+    generator_nodes = [node for node in nodes if node.get("enabled", True) and node.get("node_type") == "answer_generator"]
+    if len(generator_nodes) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "RAG flow requires exactly one enabled answer_generator node, usually as the final node. "
+                "Use module_type='llm_answer' and config.agent_id from list_agent_profiles; do not use raw model_id for agent_profile_required nodes."
+            ),
+        )
     for node in nodes:
         if not node.get("enabled", True):
             continue
@@ -253,15 +265,29 @@ async def _validate_flow_payload(
         if config_id:
             component = await get_component_config(session, config_id)
             if component.node_type != node_type or component.module_type != module_type:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Component config does not match node")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Component config does not match node. component_config_id is only for reusable "
+                        "passage_reranker, passage_filter or passage_compressor configs with the same node_type/module_type."
+                    ),
+                )
             if not component.enabled:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Component config is disabled")
         config, has_secret = _merged_component_config(component, node.get("config") or {})
+        if spec.llm_config_mode == "agent_profile_required" and config.get("model_id") and not config.get("agent_id"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"{node_type}/{module_type} requires config.agent_id from an Agent Profile, not raw model_id. "
+                    "Call list_agent_profiles or create_agent_profile, then pass config={'agent_id': '<agent_id>'}."
+                ),
+            )
         availability = spec.availability(config, has_secret)
         if availability.status != "available":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"{module_type} is not executable: {availability.reason}",
+                detail=f"{module_type} is not executable: {availability.reason}. Call get_rag_flow_build_guide, list_rag_components and list_agent_profiles to choose valid config.",
             )
     return vector_run
 

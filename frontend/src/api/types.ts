@@ -331,7 +331,7 @@ export interface AgentActionSpec {
   resource_uri_template?: string | null
 }
 
-export type AgentRunStatus = 'pending' | 'running' | 'completed' | 'failed'
+export type AgentRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export type AgentRunEventType =
   | 'message_delta'
@@ -341,6 +341,7 @@ export type AgentRunEventType =
   | 'tool_call_error'
   | 'final_answer'
   | 'run_error'
+  | 'run_cancelled'
 
 export interface AgentToolLog {
   tool_log_id: string

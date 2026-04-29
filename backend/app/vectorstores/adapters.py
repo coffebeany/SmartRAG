@@ -81,10 +81,14 @@ def _metric_for_qdrant(metric: str):
 class ChromaVectorStoreAdapter:
     def _client(self, config: dict):
         import chromadb
+        from chromadb.config import Settings as ChromaSettings
 
         path = config.get("path") or str(Path(settings.vector_storage_root) / "chroma")
         Path(path).mkdir(parents=True, exist_ok=True)
-        return chromadb.PersistentClient(path=path)
+        return chromadb.PersistentClient(
+            path=path,
+            settings=ChromaSettings(anonymized_telemetry=settings.chroma_anonymized_telemetry),
+        )
 
     async def health_check(self, config: dict) -> dict:
         client = self._client(config)

@@ -1,6 +1,10 @@
 from app.models.entities import ParseFileRun
 from app.parsers.adapters import ParsedResult
-from app.services.parse_runs import _apply_parse_success, _paginate_elements
+from app.services.parse_runs import (
+    _apply_parse_success,
+    _format_parse_delete_dependency_message,
+    _paginate_elements,
+)
 
 
 def test_paginate_elements_defaults_and_slices() -> None:
@@ -49,3 +53,19 @@ def test_apply_parse_success_does_not_write_quality_score() -> None:
     assert file_run.output_artifact_uri == "storage/parsed/run-1/file.json"
     assert document.text_content == "hello"
     assert document.char_count == 5
+
+
+def test_format_parse_delete_dependency_message_names_downstream_usage() -> None:
+    message = _format_parse_delete_dependency_message(
+        chunk_runs=["chunk-1", "chunk-2"],
+        vector_runs=["vector-1"],
+        rag_flows=["混合检索测试(flow-1)"],
+    )
+
+    assert message is not None
+    assert "该解析任务目前被" in message
+    assert "2 个分块任务" in message
+    assert "1 个向量化任务" in message
+    assert "1 个 RAG 流程" in message
+    assert "混合检索测试(flow-1)" in message
+    assert "无法删除" in message

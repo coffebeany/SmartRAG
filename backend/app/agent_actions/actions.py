@@ -4,6 +4,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -17,6 +18,7 @@ from app.schemas.evaluations import (
     EvaluationReportRunCreate,
     ParseEvaluationRunCreate,
 )
+from app.schemas.agents import AgentDryRunRequest, AgentProfileCreate, AgentProfileUpdate
 from app.schemas.materials import (
     MaterialBatchCreate,
     MaterialBatchUpdate,
@@ -31,7 +33,7 @@ from app.schemas.rag import (
     RagFlowUpdate,
 )
 from app.schemas.vectors import VectorRunCreate
-from app.services import chunks, evaluations, materials, parse_runs, rag, vectors
+from app.services import agents, chunks, evaluations, materials, models, parse_runs, rag, vectors
 
 
 OBJECT_SCHEMA = {"type": "object"}
@@ -126,6 +128,10 @@ class FailureCasesInput(BaseModel):
     limit: int = Field(default=50, ge=1, le=500)
 
 
+class AgentIdInput(BaseModel):
+    agent_id: str = Field(description="Agent Profile identifier. Use list_agent_profiles to choose this value.")
+
+
 class CreateMaterialBatchInput(MaterialBatchCreate):
     pass
 
@@ -160,6 +166,18 @@ class CreateRagFlowInput(RagFlowCreate):
 
 class UpdateRagFlowInput(RagFlowUpdate):
     flow_id: str
+
+
+class CreateAgentProfileInput(AgentProfileCreate):
+    pass
+
+
+class UpdateAgentProfileInput(AgentProfileUpdate):
+    agent_id: str
+
+
+class DryRunAgentProfileInput(AgentDryRunRequest):
+    agent_id: str
 
 
 class ParseEvaluationInput(ParseEvaluationRunCreate):
@@ -201,6 +219,79 @@ def _started(run_id: str, kind: str) -> dict[str, str]:
     }
 
 
+def _http_detail(exc: HTTPException) -> str:
+    return str(exc.detail or exc)
+
+
+def _parse_tool_hint(detail: str) -> str:
+    return (
+        f"{detail}。Agent 提示：创建解析任务前请先调用 get_parse_plan 或 list_parser_strategies，"
+        "根据文件扩展名选择 parser_options 中支持的 parser_name 与配置。"
+    )
+
+
+def _vector_tool_hint(detail: str) -> str:
+    return (
+        f"{detail}。Agent 提示：创建向量化任务前请使用自动注入上下文中的 available_embedding_models，"
+        "或调用 list_model_connections 查询当前项目可用的 embedding model_id；不要编造外部模型名称。"
+    )
+
+
+def _parse_plan_summary(plan: Any) -> dict[str, Any]:
+    return {
+        "batch_id": plan.batch.batch_id,
+        "batch_name": plan.batch.batch_name,
+        "files": [
+            {
+                "file_id": item.file.file_id,
+                "filename": item.file.original_filename,
+                "file_ext": item.file.file_ext,
+                "default_parser_name": item.default_parser_name,
+                "supported_parser_names": [parser.parser_name for parser in item.parser_options],
+            }
+            for item in plan.files
+        ],
+    }
+
+
+async def _vector_plan_summary(ctx: AgentActionContext, plan: Any) -> dict[str, Any]:
+    model_rows = (
+        await ctx.session.scalars(
+            select(models.ModelConnection)
+            .where(
+                models.ModelConnection.enabled.is_(True),
+                models.ModelConnection.model_category == "embedding",
+            )
+            .order_by(models.ModelConnection.created_at.desc())
+        )
+    ).all()
+    return {
+        "batch_id": plan.batch.batch_id,
+        "batch_name": plan.batch.batch_name,
+        "chunk_run_id": plan.chunk_run.run_id,
+        "embedding_model_candidates": [
+            {
+                "model_id": model.model_id,
+                "display_name": model.display_name,
+                "provider": model.provider,
+                "model_name": model.model_name,
+                "connection_status": model.connection_status,
+            }
+            for model in model_rows
+        ],
+        "vectordb_candidates": [item.vectordb_name for item in plan.vectordbs],
+        "files": [
+            {
+                "chunk_file_run_id": item.chunk_file_run_id,
+                "source_file_id": item.source_file_id,
+                "original_filename": item.original_filename,
+                "chunk_count": item.chunk_count,
+            }
+            for item in plan.files
+        ],
+    }
+
+
 @smartrag_action(name="list_material_batches", title="List material batches", output_schema=LIST_SCHEMA, tags=["materials"])
 async def list_material_batches(ctx: AgentActionContext, payload: EmptyActionInput) -> Any:
     """List material batches.
@@ -208,6 +299,64 @@ async def list_material_batches(ctx: AgentActionContext, payload: EmptyActionInp
     Use when the agent needs the available material collections before selecting files, parse runs, chunk runs, vector runs, or evaluation inputs. Takes no input and returns batch metadata including ids, names, descriptions, version and file count. Fails only when the database is unavailable.
     """
     return await materials.list_batches(ctx.session)
+
+
+@smartrag_action(name="list_model_connections", title="List model connections", output_schema=LIST_SCHEMA, tags=["models"])
+async def list_model_connections(ctx: AgentActionContext, payload: EmptyActionInput) -> Any:
+    """List configured model connections.
+
+    Use when the agent needs to know which LLM, embedding, reranker or custom models are configured in this SmartRAG project. Takes no input and returns non-secret model metadata including model_id, display_name, provider, model_name, category, enabled status and health status. Fails only when the database is unavailable.
+    """
+    return await models.list_models(ctx.session)
+
+
+@smartrag_action(name="list_agent_profiles", title="List Agent Profiles", output_schema=LIST_SCHEMA, tags=["agents", "rag"])
+async def list_agent_profiles(ctx: AgentActionContext, payload: EmptyActionInput) -> Any:
+    """List Agent Profiles that wrap LLM model connections.
+
+    Use before configuring any RAG node whose component schema requires config.agent_id, including answer_generator/llm_answer, query_expansion modules, RankGPT reranker, and LLM compressors. AgentProfile is not the same as ModelConnection: ModelConnection is the raw LLM/embedding endpoint; AgentProfile is a reusable LLM wrapper with prompt_template and runtime_config. Return agent_id, agent_name, agent_type, model_id, dry_run_status and enabled status. Use agent_id from this result in RAG node config.
+    """
+    return await agents.list_agent_profiles(ctx.session)
+
+
+@smartrag_action(name="get_agent_profile", title="Get Agent Profile", input_model=AgentIdInput, output_schema=OBJECT_SCHEMA, tags=["agents", "rag"])
+async def get_agent_profile(ctx: AgentActionContext, payload: AgentIdInput) -> Any:
+    """Get one Agent Profile by agent_id.
+
+    Use to inspect the prompt_template, model_id and runtime_config before placing this Agent Profile into a RAG node config.agent_id. agent_id is required. Returns non-secret Agent Profile metadata. Fails if the profile does not exist.
+    """
+    return agents._to_agent_out(await agents.get_agent(ctx.session, payload.agent_id))
+
+
+@smartrag_action(name="create_agent_profile", title="Create Agent Profile", input_model=CreateAgentProfileInput, output_schema=OBJECT_SCHEMA, permission_scope="agents:write", tags=["agents", "rag"])
+async def create_agent_profile(ctx: AgentActionContext, payload: CreateAgentProfileInput) -> Any:
+    """Create an Agent Profile wrapper around an existing LLM ModelConnection.
+
+    Use when no suitable Agent Profile exists for a RAG LLM node. Provide model_id from list_model_connections, plus agent_name, agent_type, prompt_template and runtime_config. The returned agent_id is the value to put into RAG node config.agent_id. Do not use an embedding model_id. Side effects: creates a persisted Agent Profile resource.
+    """
+    return await agents.create_agent_profile(ctx.session, payload)
+
+
+@smartrag_action(name="update_agent_profile", title="Update Agent Profile", input_model=UpdateAgentProfileInput, output_schema=OBJECT_SCHEMA, permission_scope="agents:write", is_destructive=True, tags=["agents", "rag"])
+async def update_agent_profile(ctx: AgentActionContext, payload: UpdateAgentProfileInput) -> Any:
+    """Update an existing Agent Profile.
+
+    Use only when the user asks to change a reusable LLM wrapper. agent_id is required. You may update agent_name, agent_type, model_id, prompt_template, runtime_config or enabled. Returns updated Agent Profile metadata.
+    """
+    data = payload.model_dump(exclude_unset=True)
+    agent_id = data.pop("agent_id")
+    return await agents.update_agent_profile(ctx.session, agent_id, AgentProfileUpdate.model_validate(data))
+
+
+@smartrag_action(name="dry_run_agent_profile", title="Dry-run Agent Profile", input_model=DryRunAgentProfileInput, output_schema=OBJECT_SCHEMA, permission_scope="agents:run", tags=["agents", "rag"])
+async def dry_run_agent_profile(ctx: AgentActionContext, payload: DryRunAgentProfileInput) -> Any:
+    """Run a quick validation call for an Agent Profile.
+
+    Use after creating or choosing an Agent Profile and before using its agent_id in an answer_generator or other LLM-backed RAG node. agent_id is required. input_text and variables are optional test inputs. Returns status, output or error and latency. Side effects: writes model usage and dry-run status.
+    """
+    data = payload.model_dump(exclude_unset=True)
+    agent_id = data.pop("agent_id")
+    return await agents.dry_run_agent(ctx.session, agent_id, AgentDryRunRequest.model_validate(data))
 
 
 @smartrag_action(name="create_material_batch", title="Create material batch", input_model=CreateMaterialBatchInput, output_schema=OBJECT_SCHEMA, permission_scope="materials:write", tags=["materials"])
@@ -336,7 +485,8 @@ async def get_parse_plan(ctx: AgentActionContext, payload: ParsePlanInput) -> An
 
     Use before creating a parse run to choose parser selections for active files. batch_id is required. Returns files, default parser names/configs and parser options. Fails if the batch does not exist.
     """
-    return await parse_runs.get_parse_plan(ctx.session, payload.batch_id)
+    plan = await parse_runs.get_parse_plan(ctx.session, payload.batch_id)
+    return {"plan": plan, "agent_summary": _parse_plan_summary(plan)}
 
 
 @smartrag_action(name="create_parse_run", title="Create parse run", input_model=CreateParseRunInput, output_schema=OBJECT_SCHEMA, permission_scope="parse:write", tags=["parse"])
@@ -345,7 +495,10 @@ async def create_parse_run(ctx: AgentActionContext, payload: CreateParseRunInput
 
     Use after get_parse_plan when parser selections are known. batch_id and files selections are required. Returns run_id and scheduling status for a background parse task. Fails if selected files or parser configs are invalid.
     """
-    run = await parse_runs.create_parse_run(ctx.session, payload)
+    try:
+        run = await parse_runs.create_parse_run(ctx.session, payload)
+    except HTTPException as exc:
+        raise ValueError(_parse_tool_hint(_http_detail(exc))) from exc
     asyncio.create_task(parse_runs.execute_parse_run(run.run_id))
     return _started(run.run_id, "parse")
 
@@ -531,7 +684,8 @@ async def get_vector_plan(ctx: AgentActionContext, payload: VectorPlanInput) -> 
 
     Use after a chunk run completes to inspect files, chunk counts and vector database options. batch_id and chunk_run_id are required and must belong together. Returns file summaries and available vector database adapters. Fails if chunk run is not completed.
     """
-    return await vectors.get_vector_plan(ctx.session, payload.batch_id, payload.chunk_run_id)
+    plan = await vectors.get_vector_plan(ctx.session, payload.batch_id, payload.chunk_run_id)
+    return {"plan": plan, "agent_summary": await _vector_plan_summary(ctx, plan)}
 
 
 @smartrag_action(name="create_vector_run", title="Create vector run", input_model=CreateVectorRunInput, output_schema=OBJECT_SCHEMA, permission_scope="vector:write", tags=["vector"])
@@ -540,7 +694,10 @@ async def create_vector_run(ctx: AgentActionContext, payload: CreateVectorRunInp
 
     Use after get_vector_plan when embedding model and vector database config are known. Returns run_id and scheduling status for a background vector task. Fails if chunk run is incomplete, embedding model is invalid, or vector database config is invalid.
     """
-    run = await vectors.create_vector_run(ctx.session, payload)
+    try:
+        run = await vectors.create_vector_run(ctx.session, payload)
+    except HTTPException as exc:
+        raise ValueError(_vector_tool_hint(_http_detail(exc))) from exc
     asyncio.create_task(vectors.execute_vector_run(run.run_id))
     return _started(run.run_id, "vector")
 
@@ -595,9 +752,49 @@ async def compare_vector_runs(ctx: AgentActionContext, payload: BatchIdInput) ->
 async def list_rag_components(ctx: AgentActionContext, payload: RagComponentInput) -> Any:
     """List RAG component types.
 
-    Use before creating component configs or RAG flows. Optional node_type filters components. Returns module types, schemas, requirements, LLM/embedding needs and availability. Fails only when registry inspection fails.
+    Use before creating component configs or RAG flows. Optional node_type filters components. Returns module types, schemas, requirements, LLM/embedding needs and availability. If llm_config_mode is agent_profile_required, the node config must use config.agent_id from list_agent_profiles, not a raw LLM model_id. Fails only when registry inspection fails.
     """
     return await rag.list_rag_components(payload.node_type)
+
+
+@smartrag_action(name="get_rag_flow_build_guide", title="Get RAG flow build guide", output_schema=OBJECT_SCHEMA, tags=["rag"])
+async def get_rag_flow_build_guide(ctx: AgentActionContext, payload: EmptyActionInput) -> dict[str, Any]:
+    """Get the required construction rules for a complete RAG flow.
+
+    Use before create_rag_flow or update_rag_flow. Explains node order, which nodes need Agent Profile agent_id, which nodes may use component_config_id, and why every complete flow must end with answer_generator/llm_answer. Takes no input. Returns examples and common mistakes to avoid.
+    """
+    return {
+        "required_nodes": {
+            "retrieval": "Exactly one enabled retrieval node is required. Typical module_type is vectordb, bm25, hybrid_rrf or hybrid_cc.",
+            "answer_generator": "Exactly one enabled answer_generator node is required. Put it at the end. Use module_type='llm_answer'. Its config must contain agent_id from list_agent_profiles.",
+        },
+        "recommended_order": [
+            "query_expansion (optional, often needs config.agent_id)",
+            "retrieval (required)",
+            "passage_augmenter (optional)",
+            "passage_reranker / passage_filter / passage_compressor (optional)",
+            "answer_generator (required final node)",
+        ],
+        "agent_profile_rule": (
+            "ModelConnection is the raw LLM/embedding endpoint. AgentProfile is a reusable LLM wrapper with prompt_template "
+            "and runtime_config. RAG nodes whose schema says agent_profile_required need config.agent_id, not model_id."
+        ),
+        "component_config_rule": (
+            "create_component_config only creates reusable configs for passage_reranker, passage_filter and passage_compressor. "
+            "Do not use it for retrieval, query_expansion or answer_generator; configure those directly in create_rag_flow.nodes[].config."
+        ),
+        "minimal_nodes_example": [
+            {"node_type": "retrieval", "module_type": "vectordb", "config": {"top_k": 5}, "enabled": True},
+            {"node_type": "answer_generator", "module_type": "llm_answer", "config": {"agent_id": "<agent_id from list_agent_profiles>"}, "enabled": True},
+        ],
+        "tool_sequence": [
+            "list_vector_runs or get_vector_run to choose a completed vector_run_id",
+            "get_rag_flow_build_guide",
+            "list_rag_components",
+            "list_agent_profiles; create_agent_profile if none is suitable",
+            "create_rag_flow with vector_run_id, retrieval_config and nodes",
+        ],
+    }
 
 
 @smartrag_action(name="list_component_configs", title="List component configs", input_model=ListComponentConfigsInput, output_schema=LIST_SCHEMA, tags=["rag"])
@@ -613,7 +810,7 @@ async def list_component_configs(ctx: AgentActionContext, payload: ListComponent
 async def create_component_config(ctx: AgentActionContext, payload: CreateComponentConfigInput) -> Any:
     """Create a reusable RAG component config.
 
-    Use when a reranker, filter or compressor requires shared configuration. node_type/module_type must be known and config must satisfy schema requirements. Returns created config metadata with secrets masked. Fails on unknown components or missing required config.
+    Use only for reusable passage post-processing configs where node_type is exactly one of passage_reranker, passage_filter or passage_compressor. Do not use this tool for retrieval, query_expansion, passage_augmenter or answer_generator; those are configured directly inside create_rag_flow.nodes[].config. For LLM-backed RAG nodes, use list_agent_profiles and pass config.agent_id in the flow node. node_type/module_type must be known and config must satisfy schema requirements. Returns created config metadata with secrets masked. Fails on unknown components, unsupported node_type or missing required config.
     """
     return await rag.create_component_config(ctx.session, payload)
 
@@ -652,7 +849,7 @@ async def list_rag_flows(ctx: AgentActionContext, payload: EmptyActionInput) -> 
 async def create_rag_flow(ctx: AgentActionContext, payload: CreateRagFlowInput) -> Any:
     """Create a RAG flow.
 
-    Use when a completed vector_run_id and node plan are known. Flow must include exactly one enabled retrieval node and valid component configs. Returns created flow metadata. Fails if vector run is incomplete or node configs are invalid.
+    Use only after a completed vector_run_id, build guide, components and Agent Profiles are known. A complete RAG flow must include exactly one enabled retrieval node and exactly one enabled answer_generator node, usually as the final node. The generator node should normally be {"node_type":"answer_generator","module_type":"llm_answer","config":{"agent_id":"<agent_id>"}} where agent_id comes from list_agent_profiles. Do not pass raw LLM model_id to agent_profile_required nodes. Optional reranker/filter/compressor nodes may reference component_config_id created by create_component_config. Returns created flow metadata. Fails if vector run is incomplete, generator is missing, or node configs are invalid.
     """
     return await rag.create_rag_flow(ctx.session, payload)
 

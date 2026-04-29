@@ -66,6 +66,21 @@ export function useCreateSmartRagAgentRun() {
   })
 }
 
+export function useSmartRagAgentRun(runId?: string) {
+  return useQuery({
+    queryKey: ['smartrag-agent-run', runId],
+    queryFn: () => apiClient.get<SmartRagAgentRun>(`/smartrag-agent/runs/${runId}`),
+    enabled: Boolean(runId),
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function useCancelSmartRagAgentRun() {
+  return useMutation({
+    mutationFn: (runId: string) => apiClient.post<SmartRagAgentRun>(`/smartrag-agent/runs/${runId}/cancel`),
+  })
+}
+
 export function useCreateModel() {
   const queryClient = useQueryClient()
   return useMutation({

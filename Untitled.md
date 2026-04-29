@@ -64,7 +64,7 @@ review项目代码，识别以下问题：
 
 2、增加一个fast模式，快速从0采取默认配置构建一个RAG问答
 
-
+3、草稿保存
 
 ## 疑问点
 
@@ -72,7 +72,7 @@ review项目代码，识别以下问题：
 
 2、为什么必须有generator才可以测评
 
-
+3、目前langchain的等待机制是什么，比如大批量的向量化任务可能要花相当长的时间，这种长时间等待的场景下langchain是怎么做的
 
 ## 待确认
 
@@ -110,3 +110,30 @@ review项目代码，识别以下问题：
 
 
 
+1、主对话框的对话一多，页面就会显示不下，无法显示后续内容，最后连对话框和发送按钮都看不见了。修改这部分显示逻辑，长度超出后应该可以通过滚动条显示，默认跟随底部，用户手动向上滚动后停止自动跟随，回到底部后恢复。
+
+
+
+我已经有一个原始材料批次，帮我按照你的推荐快速构建一个RAG流程并测评它
+
+sk-pnhpkujcrppaznpdytjlbpdryeqroyvjnlrgqacaqbzbftiq
+
+## 考虑在设置中启动
+
+1、langchain循环次数
+
+
+
+
+
+## MCP描述优化
+
+1、create_component_config情况下，LLM常常不理解“`create_component_config` 只支持 reranker/filter/compressor”，你应该优化描述使得LLM可以理解RAG流程节点的创建与组织方式
+
+2、必须在工具说明中向LLM表明，一个完整的RAG流程需要末尾一个generator
+
+3、似乎LLM不好区分LLM配置和Agent配置，以及大多节点需要传入的是一个Agent
+
+4、检查Agent Profile创建是否暴露接口，描述对LLM是否清晰准确
+
+5、目前LLM卡在流程构建步骤，似乎无法理解参数传入的含义，无法传入一个已有的agent配置，你需要确认这个agent profile查询的接口是否暴露且描述清晰。LLM会循环在“wrapper. Let me pass the parameter directly: <｜DSML｜tool_calls <｜DSML｜tool_callsI see the issue - the tool is not accepting the `arguments` wrapper. Let me pass the parameter directly: I see the issue - the tool is not accepting the `arguments` wrapper. Let me pass the parameter directly: <｜DSML｜tool_calls <｜DSML｜tool_calls <｜DSML｜tool_callsI see the issue - the tool is not accepting the `arguments` wrapper. Let me pass the parameter directly: <｜DSML｜tool_calls <｜DSML｜tool_calls <｜DSML｜tool_calls <｜DSML｜tool_calls <｜DSML｜t”输出中，看看是什么问题并修复

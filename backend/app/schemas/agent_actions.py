@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-AgentRunStatus = Literal["pending", "running", "completed", "failed"]
+AgentRunStatus = Literal["pending", "running", "completed", "failed", "cancelled"]
 AgentRunEventType = Literal[
     "message_delta",
     "reasoning_delta",
@@ -15,6 +15,7 @@ AgentRunEventType = Literal[
     "tool_call_error",
     "final_answer",
     "run_error",
+    "run_cancelled",
 ]
 
 

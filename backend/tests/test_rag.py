@@ -1,5 +1,8 @@
 from datetime import UTC, datetime
 
+import pytest
+from fastapi import HTTPException
+
 from app.core.security import encrypt_secret
 from app.models.entities import ComponentConfig
 from app.rag.registry import rag_component_registry
@@ -11,6 +14,7 @@ from app.services.rag import (
     _hybrid_cc,
     _hybrid_rrf,
     _normalize_scores,
+    _validate_flow_payload,
     _query_expansion_summary,
     _retrieval_candidate_top_ks,
     _render_agent_prompt,
@@ -111,6 +115,53 @@ def test_agent_query_expansion_prompt_is_template_plus_original_query() -> None:
         "当前节点输入：\nGenerate diverse retrieval queries.\n\nQuery: 大语言模型的核心概念是什么？"
     )
     assert "Generate diverse retrieval queries" in rendered
+
+
+def test_rag_flow_validation_requires_answer_generator(monkeypatch) -> None:
+    async def fake_get_vector_run_model(session, vector_run_id):
+        return type("VectorRun", (), {"status": "completed"})()
+
+    monkeypatch.setattr("app.services.rag.get_vector_run_model", fake_get_vector_run_model)
+
+    async def run_validation():
+        return await _validate_flow_payload(
+            None,  # type: ignore[arg-type]
+            vector_run_id="vector-1",
+            nodes=[{"node_type": "retrieval", "module_type": "vectordb", "config": {"top_k": 5}, "enabled": True}],
+        )
+
+    import asyncio
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(run_validation())
+
+    assert exc_info.value.status_code == 400
+    assert "answer_generator" in str(exc_info.value.detail)
+
+
+def test_rag_flow_validation_rejects_model_id_for_agent_profile_required_node(monkeypatch) -> None:
+    async def fake_get_vector_run_model(session, vector_run_id):
+        return type("VectorRun", (), {"status": "completed"})()
+
+    monkeypatch.setattr("app.services.rag.get_vector_run_model", fake_get_vector_run_model)
+
+    async def run_validation():
+        return await _validate_flow_payload(
+            None,  # type: ignore[arg-type]
+            vector_run_id="vector-1",
+            nodes=[
+                {"node_type": "retrieval", "module_type": "vectordb", "config": {"top_k": 5}, "enabled": True},
+                {"node_type": "answer_generator", "module_type": "llm_answer", "config": {"model_id": "model-1"}, "enabled": True},
+            ],
+        )
+
+    import asyncio
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(run_validation())
+
+    assert exc_info.value.status_code == 400
+    assert "config.agent_id" in str(exc_info.value.detail)
 
 
 def test_query_expansion_summary_separates_raw_output_from_display_queries() -> None:

@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.entities import MaterialFile, ParseFileRun, ParsedDocument, ParseRun
-from app.models.entities import ProcessingDefaultRule
+from app.models.entities import ChunkRun, ProcessingDefaultRule, RagFlow, VectorRun
 from app.parsers.adapters import ParsedResult, get_adapter
 from app.parsers.registry import parser_registry
 from app.schemas.materials import (
@@ -209,8 +209,77 @@ async def get_parse_run(session: AsyncSession, run_id: str) -> ParseRunOut:
     return parse_run_out(await get_parse_run_model(session, run_id))
 
 
+def _format_dependency_items(items: list[str], *, limit: int = 3) -> str:
+    visible = items[:limit]
+    suffix = f" 等 {len(items)} 个" if len(items) > limit else ""
+    return "、".join(visible) + suffix
+
+
+def _format_parse_delete_dependency_message(
+    *,
+    chunk_runs: list[str],
+    vector_runs: list[str],
+    rag_flows: list[str],
+) -> str | None:
+    parts: list[str] = []
+    if chunk_runs:
+        parts.append(f"{len(chunk_runs)} 个分块任务（{_format_dependency_items(chunk_runs)}）")
+    if vector_runs:
+        parts.append(f"{len(vector_runs)} 个向量化任务（{_format_dependency_items(vector_runs)}）")
+    if rag_flows:
+        parts.append(f"{len(rag_flows)} 个 RAG 流程（{_format_dependency_items(rag_flows)}）")
+    if not parts:
+        return None
+    return (
+        f"该解析任务目前被 {'、'.join(parts)} 使用，无法删除。"
+        "请先删除相关 RAG 流程、向量化任务和分块任务后，再删除该解析任务。"
+    )
+
+
+async def _parse_delete_dependency_message(session: AsyncSession, run_id: str) -> str | None:
+    chunk_rows = (
+        await session.scalars(
+            select(ChunkRun.run_id)
+            .where(ChunkRun.parse_run_id == run_id)
+            .order_by(ChunkRun.created_at.desc())
+        )
+    ).all()
+    if not chunk_rows:
+        return None
+    chunk_run_ids = list(chunk_rows)
+    vector_rows = (
+        await session.scalars(
+            select(VectorRun.run_id)
+            .where(VectorRun.chunk_run_id.in_(chunk_run_ids))
+            .order_by(VectorRun.created_at.desc())
+        )
+    ).all()
+    vector_run_ids = list(vector_rows)
+    rag_flow_labels: list[str] = []
+    if vector_run_ids:
+        rag_rows = (
+            await session.execute(
+                select(RagFlow.flow_name, RagFlow.flow_id)
+                .where(RagFlow.vector_run_id.in_(vector_run_ids))
+                .order_by(RagFlow.created_at.desc())
+            )
+        ).all()
+        rag_flow_labels = [
+            f"{flow_name or '未命名流程'}({flow_id})"
+            for flow_name, flow_id in rag_rows
+        ]
+    return _format_parse_delete_dependency_message(
+        chunk_runs=chunk_run_ids,
+        vector_runs=vector_run_ids,
+        rag_flows=rag_flow_labels,
+    )
+
+
 async def delete_parse_run(session: AsyncSession, run_id: str) -> None:
     run = await get_parse_run_model(session, run_id)
+    dependency_message = await _parse_delete_dependency_message(session, run_id)
+    if dependency_message:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=dependency_message)
     await session.delete(run)
     await session.commit()
     artifact_dir = _artifact_root() / run_id

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Iterable
 
@@ -134,6 +135,27 @@ def smartrag_action(
     return decorator
 
 
+def _unwrap_tool_arguments(input_data: dict[str, Any] | BaseModel | None) -> dict[str, Any] | BaseModel | None:
+    if isinstance(input_data, BaseModel) or not isinstance(input_data, dict):
+        return input_data
+    if set(input_data.keys()) != {"arguments"}:
+        return input_data
+    arguments = input_data["arguments"]
+    if isinstance(arguments, dict):
+        return arguments
+    if isinstance(arguments, str):
+        try:
+            parsed = json.loads(arguments)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "Do not wrap tool arguments in an `arguments` field; pass schema fields at the top level. "
+                "If an `arguments` field is used, it must contain a valid JSON object string."
+            ) from exc
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError("Do not wrap tool arguments in an `arguments` field; pass schema fields at the top level.")
+
+
 async def execute_action(
     name: str,
     input_data: dict[str, Any] | BaseModel | None,
@@ -141,8 +163,13 @@ async def execute_action(
 ) -> AgentActionResult:
     action = action_registry.get(name)
     assert action.handler is not None
-    payload = input_data if isinstance(input_data, BaseModel) else action.input_model.model_validate(input_data or {})
     try:
+        normalized_input = _unwrap_tool_arguments(input_data)
+        payload = (
+            normalized_input
+            if isinstance(normalized_input, BaseModel)
+            else action.input_model.model_validate(normalized_input or {})
+        )
         output = await action.handler(context, payload)
     except Exception as exc:
         return AgentActionResult(action_name=name, ok=False, error=str(exc))

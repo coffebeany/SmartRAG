@@ -350,36 +350,40 @@ body {
 }
 
 .agentConsolePage {
-  min-height: calc(100vh - 240px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: calc(100vh - 214px);
+  height: calc(100dvh - 214px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .agentConsoleGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 16px;
+  min-height: 0;
   margin-top: 20px;
-}
-
-.agentChatPanel,
-.agentToolPanel {
-  min-width: 0;
-  border: 1px solid rgba(29, 29, 31, 0.08);
-  border-radius: 8px;
-  background: #fbfaf6;
+  overflow: hidden;
 }
 
 .agentChatPanel {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(29, 29, 31, 0.08);
+  border-radius: 8px;
+  background: #fbfaf6;
   display: grid;
-  grid-template-rows: minmax(360px, 1fr) auto;
-  min-height: 620px;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .agentChatStream {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
   padding: 18px;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .agentBubble {
@@ -397,6 +401,19 @@ body {
 
 .agentBubble.assistant {
   align-self: flex-start;
+}
+
+.agentBubble.system {
+  align-self: flex-start;
+  color: #5f5a52;
+  background: #f4f1e9;
+}
+
+.agentBubble.reasoning {
+  align-self: flex-start;
+  max-width: min(860px, 92%);
+  color: #4f5f67;
+  background: #eef6f8;
 }
 
 .agentBubble p {
@@ -419,15 +436,9 @@ body {
   width: 100%;
 }
 
-.agentToolPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-}
-
-.agentReasoning {
-  white-space: pre-wrap;
+.agentTimelineToolCard {
+  align-self: flex-start;
+  width: min(860px, 92%);
 }
 
 .agentToolBody {
@@ -436,6 +447,48 @@ body {
 }
 
 .agentToolBody pre {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  color: #262522;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  background: #f6f4ef;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.agentActionToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.agentActionList {
+  background: transparent;
+}
+
+.agentActionLabel {
+  width: 100%;
+}
+
+.agentActionBody {
+  display: grid;
+  gap: 8px;
+}
+
+.agentActionBody p {
+  margin-bottom: 4px !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agentActionBody pre {
   max-height: 260px;
   margin: 0;
   padding: 10px;
@@ -539,7 +592,7 @@ body {
   }
 
   .agentChatPanel {
-    min-height: 540px;
+    min-height: 0;
   }
 
   .agentComposer {

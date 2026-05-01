@@ -13,6 +13,7 @@ from app.schemas.rag import (
     RagFlowOut,
     RagFlowRunCreate,
     RagFlowRunOut,
+    RagFlowRunSummaryOut,
     RagFlowUpdate,
 )
 from app.services import rag as rag_service
@@ -93,6 +94,21 @@ async def run_rag_flow(
     return await rag_service.run_rag_flow(session, flow_id, payload)
 
 
+@router.get("/rag-flow-runs", response_model=list[RagFlowRunSummaryOut])
+async def list_rag_flow_runs(
+    flow_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[RagFlowRunSummaryOut]:
+    return await rag_service.list_rag_flow_runs(session, flow_id=flow_id, limit=limit, offset=offset)
+
+
 @router.get("/rag-flow-runs/{run_id}", response_model=RagFlowRunOut)
 async def get_rag_flow_run(run_id: str, session: AsyncSession = Depends(get_session)) -> RagFlowRunOut:
     return await rag_service.get_rag_flow_run(session, run_id)
+
+
+@router.delete("/rag-flow-runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_rag_flow_run(run_id: str, session: AsyncSession = Depends(get_session)) -> None:
+    await rag_service.delete_rag_flow_run(session, run_id)

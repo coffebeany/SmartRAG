@@ -8,7 +8,7 @@ FastAPI backend for SmartRAG model configuration, material management, parser/ch
 uv sync
 Copy-Item .env.example .env
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 API docs are available at `http://127.0.0.1:8000/docs`.

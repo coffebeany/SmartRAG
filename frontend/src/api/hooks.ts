@@ -5,6 +5,7 @@ import type {
   AgentActionSpec,
   AgentTypeInfo,
   LangfuseConfig,
+  RagFlowRunSummary,
   ChunkFileRun,
   ChunkPage,
   ChunkPlan,
@@ -632,7 +633,46 @@ export function useRunRagFlow() {
   return useMutation({
     mutationFn: ({ flowId, query }: { flowId: string; query: string }) =>
       apiClient.post<RagFlowRun>(`/rag-flows/${flowId}/run`, { query }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rag-flows'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rag-flows'] })
+      queryClient.invalidateQueries({ queryKey: ['rag-flow-runs'] })
+    },
+  })
+}
+
+export function useRagFlowRuns(flowId?: string) {
+  return useQuery({
+    queryKey: ['rag-flow-runs', flowId],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (flowId) params.set('flow_id', flowId)
+      params.set('limit', '100')
+      const qs = params.toString()
+      return apiClient.get<RagFlowRunSummary[]>(`/rag-flow-runs${qs ? `?${qs}` : ''}`)
+    },
+  })
+}
+
+export function useDeleteRagFlowRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => apiClient.delete(`/rag-flow-runs/${runId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rag-flow-runs'] }),
+  })
+}
+
+export function useAgentRuns() {
+  return useQuery({
+    queryKey: ['agent-runs'],
+    queryFn: () => apiClient.get<SmartRagAgentRun[]>('/smartrag-agent/runs?limit=100'),
+  })
+}
+
+export function useDeleteAgentRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) => apiClient.delete(`/smartrag-agent/runs/${runId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent-runs'] }),
   })
 }
 

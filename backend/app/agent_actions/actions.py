@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Coroutine
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -35,9 +36,14 @@ from app.schemas.rag import (
 from app.schemas.vectors import VectorRunCreate
 from app.services import agents, chunks, evaluations, materials, models, parse_runs, rag, vectors
 
+logger = logging.getLogger(__name__)
 
 OBJECT_SCHEMA = {"type": "object"}
 LIST_SCHEMA = {"type": "array"}
+
+_LONG_RUN_POLL_INTERVAL_SECONDS = 2.0
+_LONG_RUN_TIMEOUT_SECONDS = 1800.0
+_TERMINAL_RUN_STATUSES = {"completed", "completed_with_errors", "failed", "cancelled"}
 
 
 class BatchIdInput(BaseModel):
@@ -211,12 +217,58 @@ class _PathUpload:
         return self.path.read_bytes()
 
 
-def _started(run_id: str, kind: str) -> dict[str, str]:
-    return {
-        "run_id": run_id,
-        "status": "pending",
-        "note": f"{kind} run was created and scheduled in the background. Poll the run detail action for progress.",
-    }
+def _spawn_background_run(task_coro: Coroutine[Any, Any, Any], *, run_type: str, run_id: str) -> None:
+    task = asyncio.create_task(task_coro)
+
+    def _done_callback(done_task: asyncio.Task[Any]) -> None:
+        if done_task.cancelled():
+            return
+        exc = done_task.exception()
+        if exc:
+            logger.exception("Background %s run task crashed: run_id=%s", run_type, run_id, exc_info=exc)
+
+    task.add_done_callback(_done_callback)
+
+
+def _result_to_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    return {"status": str(value)}
+
+
+async def _await_run_terminal(
+    run_id: str,
+    run_type: str,
+    timeout_seconds: float = _LONG_RUN_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """Wait for long-running task completion inside one tool call."""
+    getter = {
+        "parse": parse_runs.get_parse_run,
+        "chunk": chunks.get_chunk_run,
+        "vector": vectors.get_vector_run,
+        "evaluation_dataset": evaluations.get_evaluation_dataset_run,
+        "evaluation_report": evaluations.get_evaluation_report_run,
+    }.get(run_type)
+    if not getter:
+        raise ValueError(f"Unsupported run_type: {run_type}")
+
+    from app.db.session import AsyncSessionLocal
+
+    elapsed = 0.0
+    while elapsed <= timeout_seconds:
+        async with AsyncSessionLocal() as session:
+            latest = await getter(session, run_id)
+        latest_dict = _result_to_dict(latest)
+        if str(latest_dict.get("status", "")) in _TERMINAL_RUN_STATUSES:
+            return latest_dict
+        await asyncio.sleep(_LONG_RUN_POLL_INTERVAL_SECONDS)
+        elapsed += _LONG_RUN_POLL_INTERVAL_SECONDS
+    raise TimeoutError(
+        f"{run_type} run did not finish within {int(timeout_seconds)} seconds. "
+        f"run_id={run_id}"
+    )
 
 
 def _http_detail(exc: HTTPException) -> str:
@@ -493,14 +545,14 @@ async def get_parse_plan(ctx: AgentActionContext, payload: ParsePlanInput) -> An
 async def create_parse_run(ctx: AgentActionContext, payload: CreateParseRunInput) -> dict[str, Any]:
     """Create and start a parse run.
 
-    Use after get_parse_plan when parser selections are known. batch_id and files selections are required. Returns run_id and scheduling status for a background parse task. Fails if selected files or parser configs are invalid.
+    Use after get_parse_plan when parser selections are known. batch_id and files selections are required. The tool suspends until this parse run reaches a terminal status, then returns the final run summary. Fails if selected files or parser configs are invalid.
     """
     try:
         run = await parse_runs.create_parse_run(ctx.session, payload)
     except HTTPException as exc:
         raise ValueError(_parse_tool_hint(_http_detail(exc))) from exc
-    asyncio.create_task(parse_runs.execute_parse_run(run.run_id))
-    return _started(run.run_id, "parse")
+    _spawn_background_run(parse_runs.execute_parse_run(run.run_id), run_type="parse", run_id=run.run_id)
+    return {"run_id": run.run_id, "run": await _await_run_terminal(run.run_id, "parse")}
 
 
 @smartrag_action(name="list_parse_runs", title="List parse runs", output_schema=LIST_SCHEMA, tags=["parse"])
@@ -589,11 +641,11 @@ async def get_chunk_plan(ctx: AgentActionContext, payload: ChunkPlanInput) -> An
 async def create_chunk_run(ctx: AgentActionContext, payload: CreateChunkRunInput) -> dict[str, Any]:
     """Create and start a chunk run.
 
-    Use after get_chunk_plan when chunker_name and chunker_config are known. Returns run_id and scheduling status for a background chunk task. Fails if parse run is incomplete, chunker is unknown, or config is missing required fields.
+    Use after get_chunk_plan when chunker_name and chunker_config are known. The tool suspends until this chunk run reaches a terminal status, then returns the final run summary. Fails if parse run is incomplete, chunker is unknown, or config is missing required fields.
     """
     run = await chunks.create_chunk_run(ctx.session, payload)
-    asyncio.create_task(chunks.execute_chunk_run(run.run_id))
-    return _started(run.run_id, "chunk")
+    _spawn_background_run(chunks.execute_chunk_run(run.run_id), run_type="chunk", run_id=run.run_id)
+    return {"run_id": run.run_id, "run": await _await_run_terminal(run.run_id, "chunk")}
 
 
 @smartrag_action(name="list_chunk_runs", title="List chunk runs", output_schema=LIST_SCHEMA, tags=["chunk"])
@@ -692,14 +744,14 @@ async def get_vector_plan(ctx: AgentActionContext, payload: VectorPlanInput) -> 
 async def create_vector_run(ctx: AgentActionContext, payload: CreateVectorRunInput) -> dict[str, Any]:
     """Create and start a vectorization run.
 
-    Use after get_vector_plan when embedding model and vector database config are known. Returns run_id and scheduling status for a background vector task. Fails if chunk run is incomplete, embedding model is invalid, or vector database config is invalid.
+    Use after get_vector_plan when embedding model and vector database config are known. The tool suspends until this vector run reaches a terminal status, then returns the final run summary. Fails if chunk run is incomplete, embedding model is invalid, or vector database config is invalid.
     """
     try:
         run = await vectors.create_vector_run(ctx.session, payload)
     except HTTPException as exc:
         raise ValueError(_vector_tool_hint(_http_detail(exc))) from exc
-    asyncio.create_task(vectors.execute_vector_run(run.run_id))
-    return _started(run.run_id, "vector")
+    _spawn_background_run(vectors.execute_vector_run(run.run_id), run_type="vector", run_id=run.run_id)
+    return {"run_id": run.run_id, "run": await _await_run_terminal(run.run_id, "vector")}
 
 
 @smartrag_action(name="list_vector_runs", title="List vector runs", output_schema=LIST_SCHEMA, tags=["vector"])
@@ -934,11 +986,15 @@ async def list_evaluation_frameworks(ctx: AgentActionContext, payload: EmptyActi
 async def create_evaluation_dataset_run(ctx: AgentActionContext, payload: CreateEvaluationDatasetRunInput) -> dict[str, Any]:
     """Create and start an evaluation dataset generation run.
 
-    Use after a completed chunk_run_id is known and a judge LLM/embedding model is configured. Returns run_id and scheduling status for background dataset generation. Fails if framework unavailable, chunk run incomplete, or model config invalid.
+    Use after a completed chunk_run_id is known and a judge LLM/embedding model is configured. The tool suspends until this dataset run reaches a terminal status, then returns the final run summary. Fails if framework unavailable, chunk run incomplete, or model config invalid.
     """
     run = await evaluations.create_evaluation_dataset_run(ctx.session, payload)
-    asyncio.create_task(evaluations.execute_evaluation_dataset_run(run.run_id))
-    return _started(run.run_id, "evaluation dataset")
+    _spawn_background_run(
+        evaluations.execute_evaluation_dataset_run(run.run_id),
+        run_type="evaluation_dataset",
+        run_id=run.run_id,
+    )
+    return {"run_id": run.run_id, "run": await _await_run_terminal(run.run_id, "evaluation_dataset")}
 
 
 @smartrag_action(name="list_evaluation_dataset_runs", title="List evaluation dataset runs", output_schema=LIST_SCHEMA, tags=["evaluation"])
@@ -1015,11 +1071,15 @@ async def delete_evaluation_dataset_item(ctx: AgentActionContext, payload: Datas
 async def create_evaluation_report_run(ctx: AgentActionContext, payload: CreateEvaluationReportRunInput) -> dict[str, Any]:
     """Create and start an evaluation report run.
 
-    Use after a completed dataset_run_id and compatible RAG flow are known. Returns run_id and scheduling status for background report evaluation. Fails if the dataset is incomplete, flow is incompatible, framework unavailable, or required answer generator is missing.
+    Use after a completed dataset_run_id and compatible RAG flow are known. The tool suspends until this report run reaches a terminal status, then returns the final run summary. Fails if the dataset is incomplete, flow is incompatible, framework unavailable, or required answer generator is missing.
     """
     run = await evaluations.create_evaluation_report_run(ctx.session, payload)
-    asyncio.create_task(evaluations.execute_evaluation_report_run(run.run_id))
-    return _started(run.run_id, "evaluation report")
+    _spawn_background_run(
+        evaluations.execute_evaluation_report_run(run.run_id),
+        run_type="evaluation_report",
+        run_id=run.run_id,
+    )
+    return {"run_id": run.run_id, "run": await _await_run_terminal(run.run_id, "evaluation_report")}
 
 
 @smartrag_action(name="list_evaluation_report_runs", title="List evaluation report runs", output_schema=LIST_SCHEMA, tags=["evaluation"])

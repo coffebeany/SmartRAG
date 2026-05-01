@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.agent_actions import AgentActionContext, action_registry, execute_action, list_action_specs
 from app.core.security import decrypt_secret
-from app.observability import get_langchain_callback_handler
+from app.observability import flush_langfuse, get_langchain_callback_handler
 from app.db.session import AsyncSessionLocal
 from app.models.entities import (
     AgentProfile,
@@ -40,6 +40,11 @@ SMART_RAG_AGENT_RECURSION_LIMIT = 200
 logger = logging.getLogger(__name__)
 
 
+def _error_text(exc: BaseException) -> str:
+    text = str(exc).strip()
+    return text or exc.__class__.__name__
+
+
 SMART_RAG_AGENT_SYSTEM_PROMPT = """You are SmartRAG Agent, the operational assistant for a modular RAG platform.
 
 Use tools when you need current project state, run traces, parsed content, chunk details, vector index details, RAG flow results, or evaluation failures. Prefer read-only tools for inspection. Use write, delete, or run-starting tools only when the user clearly asks for that operation.
@@ -47,7 +52,7 @@ Use tools when you need current project state, run traces, parsed content, chunk
 Tool call rules:
 - Choose the smallest tool that answers the immediate question.
 - Before destructive updates or deletes, make sure the user intent is explicit.
-- For long-running create_*_run tools, return the run_id and tell the user how to poll its status.
+- Long-running create_*_run tools suspend the agent turn until they complete; do not build manual polling loops with repeated get_*_run calls.
 - If a tool fails, explain the recoverable next step from the error instead of retrying blindly.
 - Pass tool arguments as top-level JSON fields that match the tool schema. Do not wrap them in an "arguments" object.
 
@@ -164,6 +169,35 @@ async def get_agent_run_model(session: AsyncSession, run_id: str) -> SmartRagAge
 
 async def get_agent_run(session: AsyncSession, run_id: str) -> AgentRunOut:
     return _agent_run_out(await get_agent_run_model(session, run_id))
+
+
+async def list_agent_runs(
+    session: AsyncSession,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AgentRunOut]:
+    rows = (
+        await session.scalars(
+            select(SmartRagAgentRun)
+            .options(selectinload(SmartRagAgentRun.tool_logs), selectinload(SmartRagAgentRun.events))
+            .order_by(SmartRagAgentRun.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+    return [_agent_run_out(row) for row in rows]
+
+
+async def delete_agent_run(session: AsyncSession, run_id: str) -> None:
+    run = await session.get(SmartRagAgentRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SmartRAG Agent run not found")
+    if run.status in {"pending", "running"}:
+        task = _RUNNING_AGENT_TASKS.get(run_id)
+        if task and not task.done():
+            task.cancel()
+    await session.delete(run)
+    await session.commit()
 
 
 async def _mark_run_cancelled(session: AsyncSession, run_id: str, reason: str = "Agent run cancelled by user.") -> SmartRagAgentRun:
@@ -599,12 +633,19 @@ async def execute_agent_run(run_id: str) -> None:
             run.error = None
             run.ended_at = datetime.now(UTC)
             await session.commit()
+        if lf_handler:
+            try:
+                lf_handler.flush()
+            except Exception:
+                logger.debug("Langfuse handler flush failed for agent run %s", run_id, exc_info=True)
     except asyncio.CancelledError:
         async with AsyncSessionLocal() as session:
             await _mark_run_cancelled(session, run_id)
         raise
     except Exception as exc:
-        await _fail_agent_run(run_id, str(exc))
+        logger.exception("SmartRAG Agent run failed for run %s", run_id)
+        await _fail_agent_run(run_id, _error_text(exc))
+        flush_langfuse()
 
 
 async def _load_agent_event_batch(run_id: str, after_sequence: int) -> tuple[list[tuple[int, str, str]], int, bool]:

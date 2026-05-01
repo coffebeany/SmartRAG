@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 import time
@@ -10,7 +11,7 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -36,11 +37,14 @@ from app.schemas.rag import (
     RagFlowOut,
     RagFlowRunCreate,
     RagFlowRunOut,
+    RagFlowRunSummaryOut,
     RagFlowUpdate,
 )
 from app.observability import create_rag_trace, create_rag_span, create_rag_generation, end_rag_trace
 from app.services.vectors import _client_for_model, _collection_config, get_vector_run_model
 from app.vectorstores.adapters import get_vectorstore_adapter
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -384,6 +388,25 @@ def _passage_summary(passages: list[Passage]) -> dict:
         "passage_count": len(passages),
         "chunk_ids": [passage.chunk_id for passage in passages[:10]],
     }
+
+
+def _passage_preview(passages: list[Passage], limit: int = 3, content_chars: int = 180) -> list[dict[str, Any]]:
+    previews: list[dict[str, Any]] = []
+    for passage in passages[: max(limit, 0)]:
+        previews.append(
+            {
+                "chunk_id": passage.chunk_id,
+                "score": round(float(passage.score), 6),
+                "original_filename": passage.original_filename,
+                "contents_preview": (passage.contents or "")[: max(content_chars, 0)],
+            }
+        )
+    return previews
+
+
+def _error_text(exc: BaseException) -> str:
+    text = str(exc).strip()
+    return text or exc.__class__.__name__
 
 
 async def _run_prompt(
@@ -1176,7 +1199,13 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
         passages, event = await _retrieve(session, vector_run, queries, retrieval_node)
         if retrieval_span:
             try:
-                retrieval_span.end(output={"passage_count": len(passages)})
+                retrieval_span.end(
+                    output={
+                        "passage_count": len(passages),
+                        "chunk_ids": [passage.chunk_id for passage in passages[:10]],
+                        "top_passages": _passage_preview(passages),
+                    }
+                )
             except Exception:
                 pass
         trace_events.append(event)
@@ -1212,20 +1241,29 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
         run.error = None
         run.langfuse_trace_id = end_rag_trace(
             lf_ctx,
-            output=run.answer[:2000] if run.answer else None,
+            output={
+                "answer": run.answer[:2000] if run.answer else None,
+                "passage_count": len(passages),
+                "top_passages": _passage_preview(passages),
+            },
             status_message="completed",
-            metadata={"latency_ms": run.latency_ms, "passage_count": len(passages)},
+            metadata={
+                "latency_ms": run.latency_ms,
+                "passage_count": len(passages),
+                "source_chunk_ids": [passage.chunk_id for passage in passages[:20]],
+            },
         )
     except Exception as exc:
+        logger.exception("RAG flow run failed: flow_id=%s run_id=%s", flow.flow_id, run.run_id)
         run.status = "failed"
         run.answer = None
         run.answer_metadata = {}
         run.final_passages = []
         run.trace_events = trace_events
         run.latency_ms = int((time.perf_counter() - started) * 1000)
-        run.error = str(exc)
+        run.error = _error_text(exc)
         run.langfuse_trace_id = end_rag_trace(
-            lf_ctx, status_message="failed", metadata={"error": str(exc)},
+            lf_ctx, status_message="failed", metadata={"error": run.error},
         )
     await session.commit()
     await session.refresh(run)
@@ -1237,3 +1275,25 @@ async def get_rag_flow_run(session: AsyncSession, run_id: str) -> RagFlowRunOut:
     if not run:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RAG flow run not found")
     return RagFlowRunOut.model_validate(run, from_attributes=True)
+
+
+async def list_rag_flow_runs(
+    session: AsyncSession,
+    flow_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[RagFlowRunSummaryOut]:
+    stmt = select(RagFlowRun).order_by(RagFlowRun.created_at.desc())
+    if flow_id:
+        stmt = stmt.where(RagFlowRun.flow_id == flow_id)
+    stmt = stmt.offset(offset).limit(limit)
+    rows = (await session.scalars(stmt)).all()
+    return [RagFlowRunSummaryOut.model_validate(row, from_attributes=True) for row in rows]
+
+
+async def delete_rag_flow_run(session: AsyncSession, run_id: str) -> None:
+    run = await session.get(RagFlowRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RAG flow run not found")
+    await session.delete(run)
+    await session.commit()

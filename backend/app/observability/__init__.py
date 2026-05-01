@@ -6,6 +6,7 @@ from app.observability.langfuse_integration import (
     create_rag_generation,
     end_rag_trace,
     get_langchain_callback_handler,
+    flush_langfuse,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "create_rag_generation",
     "end_rag_trace",
     "get_langchain_callback_handler",
+    "flush_langfuse",
 ]

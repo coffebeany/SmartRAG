@@ -13,7 +13,7 @@ from app.services import evaluations, parse_runs, rag
 
 MCP_INSTRUCTIONS = """SmartRAG MCP exposes project operations through the same Agent Action Registry used by the UI Agent.
 
-Use read-only tools first to observe batches, runs, traces, chunks, vector indexes and evaluation failures. Use destructive tools only when the user has explicitly requested the change. Long-running create_*_run tools return a run_id; poll the matching get_*_run tool or resource to observe progress.
+Use read-only tools first to observe batches, runs, traces, chunks, vector indexes and evaluation failures. Use destructive tools only when the user has explicitly requested the change. Long-running create_*_run tools block until terminal status and then return final run output.
 """
 
 

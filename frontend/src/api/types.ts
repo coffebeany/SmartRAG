@@ -384,6 +384,19 @@ export interface SmartRagAgentRun {
   events: AgentRunEvent[]
 }
 
+export interface RagFlowRunSummary {
+  run_id: string
+  flow_id: string
+  query: string
+  status: string
+  answer?: string | null
+  latency_ms?: number | null
+  error?: string | null
+  langfuse_trace_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface LangfuseConfig {
   enabled: boolean
   host?: string | null

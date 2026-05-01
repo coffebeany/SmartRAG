@@ -81,6 +81,7 @@ class AgentRunOut(BaseModel):
     status: AgentRunStatus
     answer: str | None = None
     error: str | None = None
+    langfuse_trace_id: str | None = None
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None = None

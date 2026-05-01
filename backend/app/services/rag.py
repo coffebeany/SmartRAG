@@ -38,6 +38,7 @@ from app.schemas.rag import (
     RagFlowRunOut,
     RagFlowUpdate,
 )
+from app.observability import create_rag_trace, create_rag_span, create_rag_generation, end_rag_trace
 from app.services.vectors import _client_for_model, _collection_config, get_vector_run_model
 from app.vectorstores.adapters import get_vectorstore_adapter
 
@@ -391,6 +392,8 @@ async def _run_prompt(
     config: dict,
     prompt: str,
     query: str,
+    langfuse_parent: Any = None,
+    generation_name: str = "llm_call",
 ) -> str:
     agent_id = config.get("agent_id")
     if agent_id:
@@ -422,11 +425,22 @@ async def _run_prompt(
             max_retries=model.max_retries,
         )
     )
+    gen = create_rag_generation(
+        langfuse_parent,
+        name=generation_name,
+        model=model.model_name,
+        input=rendered[:4000],
+    )
     result = await client.chat(
         rendered,
         temperature=float(runtime.get("temperature", 0)),
         max_tokens=runtime.get("max_output_tokens"),
     )
+    if gen:
+        try:
+            gen.end(output=result.text[:2000] if result.text else "")
+        except Exception:
+            pass
     return result.text or ""
 
 
@@ -458,6 +472,7 @@ async def _query_expansion(
     query: str,
     node: dict,
     config: dict,
+    langfuse_parent: Any = None,
 ) -> tuple[list[str], dict]:
     started = time.perf_counter()
     module_type = node["module_type"]
@@ -475,15 +490,23 @@ async def _query_expansion(
         "hyde": "Write a concise hypothetical document that would answer this query for retrieval.\n\nQuery: {query}",
         "multi_query_expansion": "Generate diverse retrieval queries. Return one query per line.\n\nQuery: {query}",
     }
+    span = create_rag_span(langfuse_parent, name=f"query_expansion:{module_type}", input=query)
     output = await _run_prompt(
         session,
         config=config,
         prompt=prompts.get(module_type, "{query}").format(query=query),
         query=query,
+        langfuse_parent=span or langfuse_parent,
+        generation_name=f"query_expansion:{module_type}",
     )
     expanded = _split_queries(output, query)
     if query not in expanded:
         expanded = [query] + expanded
+    if span:
+        try:
+            span.end(output={"expanded_queries": expanded})
+        except Exception:
+            pass
     return expanded, _trace(
         node_type="query_expansion",
         module_type=module_type,
@@ -950,7 +973,7 @@ async def _api_rerank(module_type: str, query: str, passages: list[Passage], con
         return [passages[item["index"]] for item in results if item.get("index") is not None]
 
 
-async def _rerank(session: AsyncSession, query: str, passages: list[Passage], node: dict, config: dict) -> tuple[list[Passage], dict]:
+async def _rerank(session: AsyncSession, query: str, passages: list[Passage], node: dict, config: dict, langfuse_parent: Any = None) -> tuple[list[Passage], dict]:
     started = time.perf_counter()
     module_type = node["module_type"]
     top_k = int(config.get("top_k") or len(passages))
@@ -964,7 +987,7 @@ async def _rerank(session: AsyncSession, query: str, passages: list[Passage], no
             query=query,
             passages="\n\n".join(f"{item.chunk_id}: {item.contents[:700]}" for item in passages),
         )
-        ranked_text = await _run_prompt(session, config=config, prompt=prompt, query=query)
+        ranked_text = await _run_prompt(session, config=config, prompt=prompt, query=query, langfuse_parent=langfuse_parent, generation_name="reranker:rankgpt")
         ids = re.findall(r"[0-9a-fA-F-]{32,36}", ranked_text)
         by_id = {item.chunk_id: item for item in passages}
         ranked = [by_id[item] for item in ids if item in by_id]
@@ -1019,7 +1042,7 @@ def _filter(passages: list[Passage], node: dict, config: dict) -> tuple[list[Pas
     )
 
 
-async def _compress(session: AsyncSession, query: str, passages: list[Passage], node: dict, config: dict) -> tuple[list[Passage], dict]:
+async def _compress(session: AsyncSession, query: str, passages: list[Passage], node: dict, config: dict, langfuse_parent: Any = None) -> tuple[list[Passage], dict]:
     started = time.perf_counter()
     module_type = node["module_type"]
     if module_type == "pass_compressor":
@@ -1033,7 +1056,7 @@ async def _compress(session: AsyncSession, query: str, passages: list[Passage], 
             "Compress the passage for RAG context. Preserve facts useful for the query.\n"
             f"Query: {query}\n\nPassage:\n{passage.contents[:4000]}"
         )
-        text = await _run_prompt(session, config=config, prompt=prompt, query=query)
+        text = await _run_prompt(session, config=config, prompt=prompt, query=query, langfuse_parent=langfuse_parent, generation_name=f"compressor:{module_type}")
         compressed.append(
             Passage(
                 chunk_id=passage.chunk_id,
@@ -1061,6 +1084,7 @@ async def _answer(
     passages: list[Passage],
     node: dict,
     config: dict,
+    langfuse_parent: Any = None,
 ) -> tuple[str, dict, dict]:
     started = time.perf_counter()
     module_type = node["module_type"]
@@ -1080,7 +1104,7 @@ async def _answer(
         f"上下文：\n{context or '无可用上下文'}\n\n"
         "请输出最终答案。"
     )
-    answer = await _run_prompt(session, config=config, prompt=prompt, query=query)
+    answer = await _run_prompt(session, config=config, prompt=prompt, query=query, langfuse_parent=langfuse_parent, generation_name="answer_generator:llm_answer")
     metadata = {
         "context_count": len(passages),
         "source_chunk_ids": [passage.chunk_id for passage in passages],
@@ -1131,17 +1155,30 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
     await session.commit()
     started = time.perf_counter()
     trace_events: list[dict] = []
+    lf_ctx = create_rag_trace(
+        name=f"rag_flow:{flow.flow_name}",
+        session_id=flow.flow_id,
+        metadata={"flow_id": flow.flow_id, "flow_name": flow.flow_name, "run_id": run.run_id},
+        input=payload.query,
+        tags=["rag_flow"],
+    )
     try:
         query = payload.query
         queries = [query]
         for node in [item for item in flow.nodes if item.get("enabled", True) and item.get("node_type") == "query_expansion"]:
             _, config, _ = await _node_config(session, node)
-            queries, event = await _query_expansion(session, query, node, config)
+            queries, event = await _query_expansion(session, query, node, config, langfuse_parent=lf_ctx.trace)
             trace_events.append(event)
         retrieval_node = _retrieval_node(flow)
         _, retrieval_config, _ = await _node_config(session, retrieval_node)
         retrieval_node = dict(retrieval_node) | {"config": retrieval_config}
+        retrieval_span = create_rag_span(lf_ctx.trace, name=f"retrieval:{retrieval_node.get('module_type', 'vectordb')}", input={"queries": queries})
         passages, event = await _retrieve(session, vector_run, queries, retrieval_node)
+        if retrieval_span:
+            try:
+                retrieval_span.end(output={"passage_count": len(passages)})
+            except Exception:
+                pass
         trace_events.append(event)
         for node in [item for item in flow.nodes if item.get("enabled", True) and item.get("node_type") not in {"query_expansion", "retrieval", "answer_generator"}]:
             _, config, _ = await _node_config(session, node)
@@ -1149,11 +1186,11 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
             if node_type == "passage_augmenter":
                 passages, event = await _augment(session, vector_run, passages, node, config)
             elif node_type == "passage_reranker":
-                passages, event = await _rerank(session, query, passages, node, config)
+                passages, event = await _rerank(session, query, passages, node, config, langfuse_parent=lf_ctx.trace)
             elif node_type == "passage_filter":
                 passages, event = _filter(passages, node, config)
             elif node_type == "passage_compressor":
-                passages, event = await _compress(session, query, passages, node, config)
+                passages, event = await _compress(session, query, passages, node, config, langfuse_parent=lf_ctx.trace)
             else:
                 raise ValueError(f"Unsupported node type: {node_type}")
             trace_events.append(event)
@@ -1164,7 +1201,7 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
         ]
         if answer_nodes:
             _, config, _ = await _node_config(session, answer_nodes[-1])
-            answer, answer_metadata, event = await _answer(session, query, passages, answer_nodes[-1], config)
+            answer, answer_metadata, event = await _answer(session, query, passages, answer_nodes[-1], config, langfuse_parent=lf_ctx.trace)
             run.answer = answer
             run.answer_metadata = answer_metadata
             trace_events.append(event)
@@ -1173,6 +1210,12 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
         run.trace_events = trace_events
         run.latency_ms = int((time.perf_counter() - started) * 1000)
         run.error = None
+        run.langfuse_trace_id = end_rag_trace(
+            lf_ctx,
+            output=run.answer[:2000] if run.answer else None,
+            status_message="completed",
+            metadata={"latency_ms": run.latency_ms, "passage_count": len(passages)},
+        )
     except Exception as exc:
         run.status = "failed"
         run.answer = None
@@ -1181,6 +1224,9 @@ async def run_rag_flow(session: AsyncSession, flow_id: str, payload: RagFlowRunC
         run.trace_events = trace_events
         run.latency_ms = int((time.perf_counter() - started) * 1000)
         run.error = str(exc)
+        run.langfuse_trace_id = end_rag_trace(
+            lf_ctx, status_message="failed", metadata={"error": str(exc)},
+        )
     await session.commit()
     await session.refresh(run)
     return RagFlowRunOut.model_validate(run, from_attributes=True)

@@ -2,6 +2,7 @@ import { Alert, App, Button, Card, Descriptions, Input, Select, Space, Tag, Time
 import { useState } from 'react'
 import { useRagFlows, useRunRagFlow } from '../api/hooks'
 import type { RagFlowRun } from '../api/types'
+import LangfuseTraceLink from '../components/LangfuseTraceLink'
 
 function statusColor(status?: string) {
   if (status === 'success' || status === 'completed') return 'green'
@@ -82,7 +83,7 @@ export default function RagFlowExperiencePage() {
       </Card>
       {result?.status === 'failed' && <Alert type="error" showIcon message={result.error ?? '执行失败'} />}
       {result && (
-        <Card title="中间输出">
+        <Card title="中间输出" extra={<LangfuseTraceLink traceId={result.langfuse_trace_id} />}>
           <Timeline
             items={(result.trace_events ?? []).map((event, index) => ({
               color: statusColor(event.status as string),

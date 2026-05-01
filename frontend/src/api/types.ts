@@ -315,6 +315,7 @@ export interface RagFlowRun {
   trace_events: Record<string, unknown>[]
   latency_ms?: number | null
   error?: string | null
+  langfuse_trace_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -374,12 +375,18 @@ export interface SmartRagAgentRun {
   status: AgentRunStatus
   answer?: string | null
   error?: string | null
+  langfuse_trace_id?: string | null
   created_at: string
   updated_at: string
   started_at?: string | null
   ended_at?: string | null
   tool_logs: AgentToolLog[]
   events: AgentRunEvent[]
+}
+
+export interface LangfuseConfig {
+  enabled: boolean
+  host?: string | null
 }
 
 export interface EvaluationMetric {

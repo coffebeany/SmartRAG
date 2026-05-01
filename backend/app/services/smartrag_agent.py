@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.agent_actions import AgentActionContext, action_registry, execute_action, list_action_specs
 from app.core.security import decrypt_secret
+from app.observability import get_langchain_callback_handler
 from app.db.session import AsyncSessionLocal
 from app.models.entities import (
     AgentProfile,
@@ -65,6 +66,7 @@ def _agent_run_out(row: SmartRagAgentRun) -> AgentRunOut:
         status=row.status,
         answer=row.answer,
         error=row.error,
+        langfuse_trace_id=row.langfuse_trace_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
         started_at=row.started_at,
@@ -543,11 +545,25 @@ async def execute_agent_run(run_id: str) -> None:
             tools=_build_langchain_tools(run_id, enabled_action_names),
             system_prompt=f"{SMART_RAG_AGENT_SYSTEM_PROMPT}\n\n{project_context}",
         )
+        lf_handler, lf_trace_id = get_langchain_callback_handler(
+            trace_name=f"agent_run:{run_id}",
+            session_id=run_id,
+            metadata={"run_id": run_id, "model_name": model.model_name, "model_id": model.model_id},
+            tags=["smartrag_agent"],
+        )
+        run_config: dict[str, Any] = {"recursion_limit": SMART_RAG_AGENT_RECURSION_LIMIT}
+        if lf_handler:
+            run_config["callbacks"] = [lf_handler]
+        if lf_trace_id:
+            async with AsyncSessionLocal() as session:
+                run = await get_agent_run_model(session, run_id)
+                run.langfuse_trace_id = lf_trace_id
+                await session.commit()
         result: Any = None
         streamed_parts: list[str] = []
         async for event in agent.astream_events(
             {"messages": [{"role": "user", "content": user_message}]},
-            config={"recursion_limit": SMART_RAG_AGENT_RECURSION_LIMIT},
+            config=run_config,
             version="v2",
         ):
             event_name = event.get("event")

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { API_BASE_URL, apiClient } from '../api/client'
 import { useAgentActions, useCancelSmartRagAgentRun, useCreateSmartRagAgentRun, useModels, useSmartRagAgentRun } from '../api/hooks'
 import type { AgentActionSpec, AgentRunEvent, AgentRunEventType, AgentToolLog, SmartRagAgentRun } from '../api/types'
+import LangfuseTraceLink from '../components/LangfuseTraceLink'
 
 const { Text, Title, Paragraph } = Typography
 
@@ -539,6 +540,7 @@ export default function SmartRAGAgentPage() {
           <Text type="secondary">通过 Registry tools 观察和执行材料、解析、分块、向量化、RAG 与测评操作。</Text>
         </div>
         <Space>
+          <LangfuseTraceLink traceId={activeRunQuery.data?.langfuse_trace_id} />
           <Button size="small" icon={<ToolOutlined />} loading={actionsQuery.isLoading} onClick={() => setActionsOpen(true)}>
             {actionsQuery.data?.length ?? 0} actions
           </Button>

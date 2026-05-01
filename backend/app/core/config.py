@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     vector_storage_root: str = "storage/vectors"
     chroma_anonymized_telemetry: bool = False
 
+    langfuse_enabled: bool = False
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "http://localhost:3000"
+
     @cached_property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.backend_cors_origins.split(",") if origin.strip()]

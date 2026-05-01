@@ -4,6 +4,7 @@ import type {
   AgentProfile,
   AgentActionSpec,
   AgentTypeInfo,
+  LangfuseConfig,
   ChunkFileRun,
   ChunkPage,
   ChunkPlan,
@@ -767,5 +768,13 @@ export function useEvaluationReportItems(runId?: string, offset = 0, limit = 50)
     queryKey: ['evaluation-report-items', runId, offset, limit],
     queryFn: () => apiClient.get<EvaluationReportItemsPage>(`/evaluation-report-runs/${runId}/items?offset=${offset}&limit=${limit}`),
     enabled: Boolean(runId),
+  })
+}
+
+export function useLangfuseConfig() {
+  return useQuery({
+    queryKey: ['langfuse-config'],
+    queryFn: () => apiClient.get<LangfuseConfig>('/langfuse-config'),
+    staleTime: 5 * 60 * 1000,
   })
 }

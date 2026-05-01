@@ -141,5 +141,6 @@ class RagFlowRunOut(BaseModel):
     trace_events: list[dict]
     latency_ms: int | None = None
     error: str | None = None
+    langfuse_trace_id: str | None = None
     created_at: datetime
     updated_at: datetime

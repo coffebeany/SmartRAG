@@ -19,7 +19,8 @@ dependencies = [
   "python-multipart>=0.0.20,<1.0.0",
   "sqlalchemy[asyncio]>=2.0.32,<3.0.0",
   "tenacity>=9.0.0,<10.0.0",
-  "uvicorn[standard]>=0.30.0,<1.0.0"
+  "uvicorn[standard]>=0.30.0,<1.0.0",
+  "langfuse>=2.0.0,<3.0.0"
 ]
 
 [project.optional-dependencies]

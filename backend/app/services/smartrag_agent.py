@@ -550,6 +550,8 @@ async def execute_agent_run(run_id: str) -> None:
         await _fail_agent_run(run_id, f"LangChain dependencies are not available: {exc}")
         return
 
+    lf_handler = None
+    lf_trace_id = ""
     try:
         async with AsyncSessionLocal() as session:
             run = await get_agent_run_model(session, run_id)
@@ -565,6 +567,20 @@ async def execute_agent_run(run_id: str) -> None:
             enabled_action_names = list(run.enabled_action_names or [])
             user_message = run.message
             project_context = await build_project_context(session)
+            lf_handler, lf_trace_id = get_langchain_callback_handler(
+                trace_name="smartrag_agent_run",
+                session_id=run_id,
+                metadata={
+                    "run_id": run_id,
+                    "model_id": model.model_id,
+                    "model_name": model.model_name,
+                    "enabled_action_names": enabled_action_names,
+                },
+                tags=["smartrag_agent"],
+            )
+            if lf_trace_id:
+                run.langfuse_trace_id = lf_trace_id
+                await session.commit()
 
         chat_model = ChatOpenAI(
             model=model.model_name,
@@ -579,20 +595,9 @@ async def execute_agent_run(run_id: str) -> None:
             tools=_build_langchain_tools(run_id, enabled_action_names),
             system_prompt=f"{SMART_RAG_AGENT_SYSTEM_PROMPT}\n\n{project_context}",
         )
-        lf_handler, lf_trace_id = get_langchain_callback_handler(
-            trace_name=f"agent_run:{run_id}",
-            session_id=run_id,
-            metadata={"run_id": run_id, "model_name": model.model_name, "model_id": model.model_id},
-            tags=["smartrag_agent"],
-        )
         run_config: dict[str, Any] = {"recursion_limit": SMART_RAG_AGENT_RECURSION_LIMIT}
         if lf_handler:
             run_config["callbacks"] = [lf_handler]
-        if lf_trace_id:
-            async with AsyncSessionLocal() as session:
-                run = await get_agent_run_model(session, run_id)
-                run.langfuse_trace_id = lf_trace_id
-                await session.commit()
         result: Any = None
         streamed_parts: list[str] = []
         async for event in agent.astream_events(
@@ -635,15 +640,43 @@ async def execute_agent_run(run_id: str) -> None:
             await session.commit()
         if lf_handler:
             try:
+                if hasattr(lf_handler, "trace") and lf_handler.trace:
+                    lf_handler.trace.update(
+                        output={"answer": answer, "status": "completed"},
+                        status_message="completed",
+                        metadata={"run_id": run_id, "status": "completed"},
+                    )
                 lf_handler.flush()
             except Exception:
-                logger.debug("Langfuse handler flush failed for agent run %s", run_id, exc_info=True)
+                logger.debug("Langfuse handler finalization failed", exc_info=True)
     except asyncio.CancelledError:
+        if lf_handler:
+            try:
+                if hasattr(lf_handler, "trace") and lf_handler.trace:
+                    lf_handler.trace.update(
+                        output={"status": "cancelled"},
+                        status_message="cancelled",
+                        metadata={"run_id": run_id, "status": "cancelled"},
+                    )
+                lf_handler.flush()
+            except Exception:
+                logger.debug("Langfuse handler finalization failed on cancel", exc_info=True)
         async with AsyncSessionLocal() as session:
             await _mark_run_cancelled(session, run_id)
         raise
     except Exception as exc:
         logger.exception("SmartRAG Agent run failed for run %s", run_id)
+        if lf_handler:
+            try:
+                if hasattr(lf_handler, "trace") and lf_handler.trace:
+                    lf_handler.trace.update(
+                        output={"status": "failed", "error": _error_text(exc)},
+                        status_message="failed",
+                        metadata={"run_id": run_id, "status": "failed"},
+                    )
+                lf_handler.flush()
+            except Exception:
+                logger.debug("Langfuse handler finalization failed on error", exc_info=True)
         await _fail_agent_run(run_id, _error_text(exc))
         flush_langfuse()
 

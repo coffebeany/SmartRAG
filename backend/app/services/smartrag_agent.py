@@ -542,6 +542,31 @@ def _build_langchain_tools(run_id: str, action_names: list[str]):
     return tools
 
 
+def _get_handler_trace_id(handler: Any) -> str:
+    """Extract trace_id from a Langfuse CallbackHandler after it has been used."""
+    if handler is None:
+        return ""
+    # langfuse v2+: get_trace_id() method
+    if hasattr(handler, "get_trace_id"):
+        try:
+            return handler.get_trace_id() or ""
+        except Exception:
+            pass
+    # fallback: handler.trace.id (populated after first callback fires)
+    if hasattr(handler, "trace") and handler.trace:
+        try:
+            return handler.trace.id or ""
+        except Exception:
+            pass
+    # fallback: handler.trace_id attribute
+    if hasattr(handler, "trace_id"):
+        try:
+            return handler.trace_id or ""
+        except Exception:
+            pass
+    return ""
+
+
 async def execute_agent_run(run_id: str) -> None:
     try:
         from langchain.agents import create_agent
@@ -551,7 +576,6 @@ async def execute_agent_run(run_id: str) -> None:
         return
 
     lf_handler = None
-    lf_trace_id = ""
     try:
         async with AsyncSessionLocal() as session:
             run = await get_agent_run_model(session, run_id)
@@ -567,7 +591,7 @@ async def execute_agent_run(run_id: str) -> None:
             enabled_action_names = list(run.enabled_action_names or [])
             user_message = run.message
             project_context = await build_project_context(session)
-            lf_handler, lf_trace_id = get_langchain_callback_handler(
+            lf_handler, _ = get_langchain_callback_handler(
                 trace_name="smartrag_agent_run",
                 session_id=run_id,
                 metadata={
@@ -578,9 +602,6 @@ async def execute_agent_run(run_id: str) -> None:
                 },
                 tags=["smartrag_agent"],
             )
-            if lf_trace_id:
-                run.langfuse_trace_id = lf_trace_id
-                await session.commit()
 
         chat_model = ChatOpenAI(
             model=model.model_name,
@@ -649,6 +670,13 @@ async def execute_agent_run(run_id: str) -> None:
                 lf_handler.flush()
             except Exception:
                 logger.debug("Langfuse handler finalization failed", exc_info=True)
+            # Persist trace_id (only available after callbacks have fired)
+            resolved_trace_id = _get_handler_trace_id(lf_handler)
+            if resolved_trace_id:
+                async with AsyncSessionLocal() as session:
+                    run = await get_agent_run_model(session, run_id)
+                    run.langfuse_trace_id = resolved_trace_id
+                    await session.commit()
     except asyncio.CancelledError:
         if lf_handler:
             try:
@@ -661,8 +689,14 @@ async def execute_agent_run(run_id: str) -> None:
                 lf_handler.flush()
             except Exception:
                 logger.debug("Langfuse handler finalization failed on cancel", exc_info=True)
+            resolved_trace_id = _get_handler_trace_id(lf_handler)
+        else:
+            resolved_trace_id = ""
         async with AsyncSessionLocal() as session:
-            await _mark_run_cancelled(session, run_id)
+            run = await _mark_run_cancelled(session, run_id)
+            if resolved_trace_id:
+                run.langfuse_trace_id = resolved_trace_id
+                await session.commit()
         raise
     except Exception as exc:
         logger.exception("SmartRAG Agent run failed for run %s", run_id)
@@ -677,6 +711,12 @@ async def execute_agent_run(run_id: str) -> None:
                 lf_handler.flush()
             except Exception:
                 logger.debug("Langfuse handler finalization failed on error", exc_info=True)
+            resolved_trace_id = _get_handler_trace_id(lf_handler)
+            if resolved_trace_id:
+                async with AsyncSessionLocal() as session:
+                    run = await get_agent_run_model(session, run_id)
+                    run.langfuse_trace_id = resolved_trace_id
+                    await session.commit()
         await _fail_agent_run(run_id, _error_text(exc))
         flush_langfuse()
 

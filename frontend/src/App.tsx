@@ -36,6 +36,8 @@ import ProcessingRulesPage from './pages/ProcessingRulesPage'
 import RagFlowBuilderPage from './pages/RagFlowBuilderPage'
 import RagFlowExperiencePage from './pages/RagFlowExperiencePage'
 import RagFlowsPage from './pages/RagFlowsPage'
+import AgentRunHistoryPage from './pages/AgentRunHistoryPage'
+import RagFlowRunHistoryPage from './pages/RagFlowRunHistoryPage'
 import SmartRAGAgentPage from './pages/SmartRAGAgentPage'
 import VectorDBsPage from './pages/VectorDBsPage'
 import VectorRunDetailPage from './pages/VectorRunDetailPage'
@@ -165,7 +167,9 @@ function BuildWorkspace() {
   }
   if (location.pathname.includes('/evaluation-reports')) selectedKey = '/build/evaluation-reports'
   if (location.pathname.includes('/chunk-compare')) selectedKey = '/build/chunk-compare'
-  if (location.pathname.includes('/smartrag-agent')) selectedKey = '/build/smartrag-agent'
+  if (location.pathname.includes('/agent-history')) selectedKey = '/build/agent-history'
+  else if (location.pathname.includes('/smartrag-agent')) selectedKey = '/build/smartrag-agent'
+  if (location.pathname.includes('/rag-run-history')) selectedKey = '/build/rag-run-history'
   const items: MenuProps['items'] = [
     {
       key: 'build-agent-root',
@@ -173,6 +177,7 @@ function BuildWorkspace() {
       label: 'SmartRAG Agent',
       children: [
         { key: '/build/smartrag-agent', icon: <RobotOutlined />, label: <Link to="/build/smartrag-agent">Agent 对话</Link> },
+        { key: '/build/agent-history', icon: <RobotOutlined />, label: <Link to="/build/agent-history">对话历史</Link> },
       ],
     },
     {
@@ -204,6 +209,7 @@ function BuildWorkspace() {
         { key: '/build/rag-flow-builder', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flow-builder">流程构建</Link> },
         { key: '/build/rag-flows', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flows">流程列表</Link> },
         { key: '/build/rag-experience', icon: <RobotOutlined />, label: <Link to="/build/rag-experience">流程体验</Link> },
+        { key: '/build/rag-run-history', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/rag-run-history">体验历史</Link> },
       ],
     },
     {
@@ -234,6 +240,7 @@ function BuildWorkspace() {
         <Routes>
           <Route index element={<Navigate to="/build/material-parse" replace />} />
           <Route path="smartrag-agent" element={<SmartRAGAgentPage />} />
+          <Route path="agent-history" element={<AgentRunHistoryPage />} />
           <Route path="material-parse" element={<MaterialParsePage />} />
           <Route path="parse-runs" element={<ParseRunsPage />} />
           <Route path="parse-runs/:runId" element={<ParseRunDetailPage />} />
@@ -248,6 +255,7 @@ function BuildWorkspace() {
           <Route path="rag-flow-builder/:flowId" element={<RagFlowBuilderPage />} />
           <Route path="rag-flows" element={<RagFlowsPage />} />
           <Route path="rag-experience" element={<RagFlowExperiencePage />} />
+          <Route path="rag-run-history" element={<RagFlowRunHistoryPage />} />
           <Route path="evaluation-datasets" element={<EvaluationDatasetsPage />} />
           <Route path="evaluation-datasets/:runId" element={<EvaluationDatasetDetailPage />} />
           <Route path="evaluation-dataset-runs" element={<EvaluationDatasetRunsPage />} />

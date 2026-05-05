@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.agent_actions import AgentActionContext, action_registry, execute_action, list_action_specs
 from app.core.security import decrypt_secret
-from app.observability import get_langchain_callback_handler
+from app.observability import create_rag_trace, end_rag_trace, flush_langfuse
 from app.db.session import AsyncSessionLocal
 from app.models.entities import (
     AgentProfile,
@@ -40,6 +40,11 @@ SMART_RAG_AGENT_RECURSION_LIMIT = 200
 logger = logging.getLogger(__name__)
 
 
+def _error_text(exc: BaseException) -> str:
+    text = str(exc).strip()
+    return text or exc.__class__.__name__
+
+
 SMART_RAG_AGENT_SYSTEM_PROMPT = """You are SmartRAG Agent, the operational assistant for a modular RAG platform.
 
 Use tools when you need current project state, run traces, parsed content, chunk details, vector index details, RAG flow results, or evaluation failures. Prefer read-only tools for inspection. Use write, delete, or run-starting tools only when the user clearly asks for that operation.
@@ -47,7 +52,7 @@ Use tools when you need current project state, run traces, parsed content, chunk
 Tool call rules:
 - Choose the smallest tool that answers the immediate question.
 - Before destructive updates or deletes, make sure the user intent is explicit.
-- For long-running create_*_run tools, return the run_id and tell the user how to poll its status.
+- Long-running create_*_run tools suspend the agent turn until they complete; do not build manual polling loops with repeated get_*_run calls.
 - If a tool fails, explain the recoverable next step from the error instead of retrying blindly.
 - Pass tool arguments as top-level JSON fields that match the tool schema. Do not wrap them in an "arguments" object.
 
@@ -164,6 +169,35 @@ async def get_agent_run_model(session: AsyncSession, run_id: str) -> SmartRagAge
 
 async def get_agent_run(session: AsyncSession, run_id: str) -> AgentRunOut:
     return _agent_run_out(await get_agent_run_model(session, run_id))
+
+
+async def list_agent_runs(
+    session: AsyncSession,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[AgentRunOut]:
+    rows = (
+        await session.scalars(
+            select(SmartRagAgentRun)
+            .options(selectinload(SmartRagAgentRun.tool_logs), selectinload(SmartRagAgentRun.events))
+            .order_by(SmartRagAgentRun.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+    return [_agent_run_out(row) for row in rows]
+
+
+async def delete_agent_run(session: AsyncSession, run_id: str) -> None:
+    run = await session.get(SmartRagAgentRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SmartRAG Agent run not found")
+    if run.status in {"pending", "running"}:
+        task = _RUNNING_AGENT_TASKS.get(run_id)
+        if task and not task.done():
+            task.cancel()
+    await session.delete(run)
+    await session.commit()
 
 
 async def _mark_run_cancelled(session: AsyncSession, run_id: str, reason: str = "Agent run cancelled by user.") -> SmartRagAgentRun:
@@ -508,6 +542,147 @@ def _build_langchain_tools(run_id: str, action_names: list[str]):
     return tools
 
 
+class _AgentLangfuseTracker:
+    """Lightweight wrapper around the Langfuse Python SDK for tracking agent events.
+
+    Uses create_rag_trace / end_rag_trace for the top-level trace, and creates
+    child spans (tool calls) and generations (LLM calls) directly via the
+    Langfuse stateful trace client during the astream_events loop.
+    """
+
+    def __init__(self, trace_ctx: Any):
+        from app.observability.langfuse_integration import _EMPTY_CONTEXT
+
+        self._ctx = trace_ctx
+        self._enabled = trace_ctx is not None and trace_ctx is not _EMPTY_CONTEXT and bool(trace_ctx.trace)
+        # Track open spans: run_id from astream_events -> Langfuse span/generation client
+        self._open_generations: dict[str, Any] = {}
+        self._open_tool_spans: dict[str, Any] = {}
+        self._llm_streamed_tokens: dict[str, list[str]] = {}
+
+    @property
+    def trace_id(self) -> str:
+        return self._ctx.trace_id if self._enabled else ""
+
+    def on_chat_model_start(self, run_id: str, model_name: str, input_messages: Any = None) -> None:
+        if not self._enabled:
+            return
+        try:
+            gen = self._ctx.trace.generation(
+                name="llm_call",
+                model=model_name,
+                input=input_messages,
+                start_time=datetime.now(UTC),
+            )
+            self._open_generations[run_id] = gen
+            self._llm_streamed_tokens[run_id] = []
+        except Exception:
+            logger.debug("Langfuse generation start failed", exc_info=True)
+
+    def on_chat_model_stream(self, run_id: str, token: str) -> None:
+        if run_id in self._llm_streamed_tokens:
+            self._llm_streamed_tokens[run_id].append(token)
+
+    def on_chat_model_end(self, run_id: str, output: Any = None) -> None:
+        if not self._enabled:
+            return
+        gen = self._open_generations.pop(run_id, None)
+        if gen is None:
+            return
+        try:
+            streamed = "".join(self._llm_streamed_tokens.pop(run_id, []))
+            gen.end(
+                output=output or streamed or None,
+                end_time=datetime.now(UTC),
+            )
+        except Exception:
+            logger.debug("Langfuse generation end failed", exc_info=True)
+
+    def on_tool_start(self, run_id: str, tool_name: str, tool_input: Any = None) -> None:
+        if not self._enabled:
+            return
+        try:
+            span = self._ctx.trace.span(
+                name=f"tool:{tool_name}",
+                input=tool_input,
+                start_time=datetime.now(UTC),
+                metadata={"tool_name": tool_name},
+            )
+            self._open_tool_spans[run_id] = span
+        except Exception:
+            logger.debug("Langfuse tool span start failed", exc_info=True)
+
+    def on_tool_end(self, run_id: str, output: Any = None) -> None:
+        if not self._enabled:
+            return
+        span = self._open_tool_spans.pop(run_id, None)
+        if span is None:
+            return
+        try:
+            span.end(
+                output=output,
+                end_time=datetime.now(UTC),
+            )
+        except Exception:
+            logger.debug("Langfuse tool span end failed", exc_info=True)
+
+    def on_tool_error(self, run_id: str, error: str) -> None:
+        if not self._enabled:
+            return
+        span = self._open_tool_spans.pop(run_id, None)
+        if span is None:
+            return
+        try:
+            span.end(
+                output={"error": error},
+                level="ERROR",
+                status_message=error,
+                end_time=datetime.now(UTC),
+            )
+        except Exception:
+            logger.debug("Langfuse tool span error failed", exc_info=True)
+
+    def handle_event(self, event: dict[str, Any], model_name: str) -> None:
+        """Process a single astream_events v2 event."""
+        event_name = event.get("event", "")
+        run_id = event.get("run_id", "")
+        data = event.get("data") or {}
+
+        if event_name == "on_chat_model_start":
+            input_msgs = data.get("input")
+            self.on_chat_model_start(run_id, model_name, input_msgs)
+        elif event_name in {"on_chat_model_stream", "on_llm_stream"}:
+            chunk = data.get("chunk")
+            token = _extract_message_text(chunk) if chunk else ""
+            if token:
+                self.on_chat_model_stream(run_id, token)
+        elif event_name == "on_chat_model_end":
+            output = data.get("output")
+            output_text = _extract_message_text(output) if output else None
+            self.on_chat_model_end(run_id, output_text)
+        elif event_name == "on_tool_start":
+            tool_input = data.get("input")
+            tool_name = event.get("name", "unknown_tool")
+            self.on_tool_start(run_id, tool_name, tool_input)
+        elif event_name == "on_tool_end":
+            output = data.get("output")
+            self.on_tool_end(run_id, output)
+        elif event_name == "on_tool_error":
+            error = str(data.get("error", "unknown error"))
+            self.on_tool_error(run_id, error)
+
+    def finalize(self, *, output: Any, status: str, metadata: dict[str, Any] | None = None) -> str:
+        """Finalize the trace and return the trace_id."""
+        if not self._enabled:
+            return ""
+        return end_rag_trace(
+            self._ctx,
+            output=output,
+            status_message=status,
+            metadata=metadata,
+        )
+
+
 async def execute_agent_run(run_id: str) -> None:
     try:
         from langchain.agents import create_agent
@@ -516,6 +691,7 @@ async def execute_agent_run(run_id: str) -> None:
         await _fail_agent_run(run_id, f"LangChain dependencies are not available: {exc}")
         return
 
+    tracker = _AgentLangfuseTracker(None)
     try:
         async with AsyncSessionLocal() as session:
             run = await get_agent_run_model(session, run_id)
@@ -531,6 +707,22 @@ async def execute_agent_run(run_id: str) -> None:
             enabled_action_names = list(run.enabled_action_names or [])
             user_message = run.message
             project_context = await build_project_context(session)
+            trace_ctx = create_rag_trace(
+                name="smartrag_agent_run",
+                session_id=run_id,
+                metadata={
+                    "run_id": run_id,
+                    "model_id": model.model_id,
+                    "model_name": model.model_name,
+                    "enabled_action_names": enabled_action_names,
+                },
+                input={"message": user_message},
+                tags=["smartrag_agent"],
+            )
+            tracker = _AgentLangfuseTracker(trace_ctx)
+            if tracker.trace_id:
+                run.langfuse_trace_id = tracker.trace_id
+                await session.commit()
 
         chat_model = ChatOpenAI(
             model=model.model_name,
@@ -545,20 +737,7 @@ async def execute_agent_run(run_id: str) -> None:
             tools=_build_langchain_tools(run_id, enabled_action_names),
             system_prompt=f"{SMART_RAG_AGENT_SYSTEM_PROMPT}\n\n{project_context}",
         )
-        lf_handler, lf_trace_id = get_langchain_callback_handler(
-            trace_name=f"agent_run:{run_id}",
-            session_id=run_id,
-            metadata={"run_id": run_id, "model_name": model.model_name, "model_id": model.model_id},
-            tags=["smartrag_agent"],
-        )
         run_config: dict[str, Any] = {"recursion_limit": SMART_RAG_AGENT_RECURSION_LIMIT}
-        if lf_handler:
-            run_config["callbacks"] = [lf_handler]
-        if lf_trace_id:
-            async with AsyncSessionLocal() as session:
-                run = await get_agent_run_model(session, run_id)
-                run.langfuse_trace_id = lf_trace_id
-                await session.commit()
         result: Any = None
         streamed_parts: list[str] = []
         async for event in agent.astream_events(
@@ -566,6 +745,9 @@ async def execute_agent_run(run_id: str) -> None:
             config=run_config,
             version="v2",
         ):
+            # Feed every event to the Langfuse tracker for observability
+            tracker.handle_event(event, model_name=model.model_name)
+
             event_name = event.get("event")
             data = event.get("data") or {}
             if event_name in {"on_chat_model_stream", "on_llm_stream"}:
@@ -599,12 +781,29 @@ async def execute_agent_run(run_id: str) -> None:
             run.error = None
             run.ended_at = datetime.now(UTC)
             await session.commit()
+        tracker.finalize(
+            output={"answer": answer, "status": "completed"},
+            status="completed",
+            metadata={"run_id": run_id, "status": "completed"},
+        )
     except asyncio.CancelledError:
+        tracker.finalize(
+            output={"status": "cancelled"},
+            status="cancelled",
+            metadata={"run_id": run_id, "status": "cancelled"},
+        )
         async with AsyncSessionLocal() as session:
             await _mark_run_cancelled(session, run_id)
         raise
     except Exception as exc:
-        await _fail_agent_run(run_id, str(exc))
+        logger.exception("SmartRAG Agent run failed for run %s", run_id)
+        tracker.finalize(
+            output={"status": "failed", "error": _error_text(exc)},
+            status="failed",
+            metadata={"run_id": run_id, "status": "failed"},
+        )
+        await _fail_agent_run(run_id, _error_text(exc))
+        flush_langfuse()
 
 
 async def _load_agent_event_batch(run_id: str, after_sequence: int) -> tuple[list[tuple[int, str, str]], int, bool]:

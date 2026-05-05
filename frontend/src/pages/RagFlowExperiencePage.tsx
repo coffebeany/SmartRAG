@@ -81,7 +81,7 @@ export default function RagFlowExperiencePage() {
           <Button type="primary" loading={runFlow.isPending} onClick={submit}>运行流程</Button>
         </Space>
       </Card>
-      {result?.status === 'failed' && <Alert type="error" showIcon message={result.error ?? '执行失败'} />}
+      {result?.status === 'failed' && <Alert type="error" showIcon message={result.error || '执行失败'} />}
       {result && (
         <Card title="中间输出" extra={<LangfuseTraceLink traceId={result.langfuse_trace_id} />}>
           <Timeline

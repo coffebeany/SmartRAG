@@ -144,3 +144,20 @@ class RagFlowRunOut(BaseModel):
     langfuse_trace_id: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class RagFlowRunSummaryOut(BaseModel):
+    """Lightweight summary for listing runs — omits heavy fields (passages, traces)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    run_id: str
+    flow_id: str
+    query: str
+    status: str
+    answer: str | None = None
+    latency_ms: int | None = None
+    error: str | None = None
+    langfuse_trace_id: str | None = None
+    created_at: datetime
+    updated_at: datetime

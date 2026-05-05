@@ -11,6 +11,43 @@ export class ApiError extends Error {
   }
 }
 
+function asString(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
+function extractErrorMessage(payload: unknown, statusText: string, status: number): string {
+  const fallback = asString(statusText) || `请求失败 (${status})`
+  if (!payload || typeof payload !== 'object') return fallback
+  const detail = (payload as { detail?: unknown }).detail
+  const direct = asString(detail)
+  if (direct) return direct
+  if (Array.isArray(detail)) {
+    const joined = detail
+      .map((item) => {
+        const msg = asString((item as { msg?: unknown })?.msg)
+        if (msg) return msg
+        const text = asString(item)
+        if (text) return text
+        try {
+          return JSON.stringify(item)
+        } catch {
+          return ''
+        }
+      })
+      .filter(Boolean)
+      .join('; ')
+    if (joined) return joined
+  }
+  try {
+    const compact = JSON.stringify(payload)
+    return compact && compact !== '{}' ? compact : fallback
+  } catch {
+    return fallback
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -22,7 +59,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
-    throw new ApiError(response.status, (payload as { detail?: string }).detail ?? response.statusText, payload)
+    throw new ApiError(response.status, extractErrorMessage(payload, response.statusText, response.status), payload)
   }
   if (response.status === 204) {
     return undefined as T

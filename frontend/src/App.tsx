@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   BuildOutlined,
+  CommentOutlined,
   DatabaseOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
@@ -47,6 +48,7 @@ import VectorRunsPage from './pages/VectorRunsPage'
 const { Header, Content } = Layout
 
 function getTopKey(pathname: string) {
+  if (pathname.startsWith('/chat')) return 'chat'
   if (pathname.startsWith('/build')) return 'build'
   if (pathname.startsWith('/settings')) return 'settings'
   return 'config'
@@ -151,6 +153,58 @@ function ConfigWorkspace() {
   )
 }
 
+function ChatWorkspace() {
+  const location = useLocation()
+  let selectedKey = '/chat/smartrag-agent'
+  if (location.pathname.includes('/agent-history')) selectedKey = '/chat/agent-history'
+  if (location.pathname.includes('/rag-experience')) selectedKey = '/chat/rag-experience'
+  if (location.pathname.includes('/rag-run-history')) selectedKey = '/chat/rag-run-history'
+  const items: MenuProps['items'] = [
+    {
+      key: 'chat-agent-root',
+      icon: <RobotOutlined />,
+      label: 'SmartRAG Agent',
+      children: [
+        { key: '/chat/smartrag-agent', icon: <RobotOutlined />, label: <Link to="/chat/smartrag-agent">Agent 对话</Link> },
+        { key: '/chat/agent-history', icon: <RobotOutlined />, label: <Link to="/chat/agent-history">对话历史</Link> },
+      ],
+    },
+    {
+      key: 'chat-experience-root',
+      icon: <NodeIndexOutlined />,
+      label: '流程体验',
+      children: [
+        { key: '/chat/rag-experience', icon: <RobotOutlined />, label: <Link to="/chat/rag-experience">流程体验</Link> },
+        { key: '/chat/rag-run-history', icon: <FundProjectionScreenOutlined />, label: <Link to="/chat/rag-run-history">体验历史</Link> },
+      ],
+    },
+  ]
+
+  return (
+    <div className="workspace">
+      <aside className="configRail">
+        <div className="railSectionTitle">对话</div>
+        <Menu
+          className="configMenu"
+          mode="inline"
+          selectedKeys={[selectedKey]}
+          defaultOpenKeys={['chat-agent-root', 'chat-experience-root']}
+          items={items}
+        />
+      </aside>
+      <section className="workspaceContent">
+        <Routes>
+          <Route index element={<Navigate to="/chat/smartrag-agent" replace />} />
+          <Route path="smartrag-agent" element={<SmartRAGAgentPage />} />
+          <Route path="agent-history" element={<AgentRunHistoryPage />} />
+          <Route path="rag-experience" element={<RagFlowExperiencePage />} />
+          <Route path="rag-run-history" element={<RagFlowRunHistoryPage />} />
+        </Routes>
+      </section>
+    </div>
+  )
+}
+
 function BuildWorkspace() {
   const location = useLocation()
   let selectedKey = '/build/material-parse'
@@ -161,7 +215,6 @@ function BuildWorkspace() {
   if (location.pathname.includes('/vector-runs')) selectedKey = '/build/vector-runs'
   if (location.pathname.includes('/rag-flow-builder')) selectedKey = '/build/rag-flow-builder'
   if (location.pathname.includes('/rag-flows')) selectedKey = '/build/rag-flows'
-  if (location.pathname.includes('/rag-experience')) selectedKey = '/build/rag-experience'
   if (location.pathname.includes('/evaluation-datasets')) selectedKey = '/build/evaluation-datasets'
   if (location.pathname.includes('/evaluation-datasets/') || location.pathname.includes('/evaluation-dataset-runs')) {
     selectedKey = '/build/evaluation-dataset-runs'
@@ -170,19 +223,7 @@ function BuildWorkspace() {
   if (location.pathname.includes('/evaluation-reports/')) selectedKey = '/build/evaluation-report-list'
   if (location.pathname.includes('/evaluation-report-list')) selectedKey = '/build/evaluation-report-list'
   if (location.pathname.includes('/chunk-compare')) selectedKey = '/build/chunk-compare'
-  if (location.pathname.includes('/agent-history')) selectedKey = '/build/agent-history'
-  else if (location.pathname.includes('/smartrag-agent')) selectedKey = '/build/smartrag-agent'
-  if (location.pathname.includes('/rag-run-history')) selectedKey = '/build/rag-run-history'
   const items: MenuProps['items'] = [
-    {
-      key: 'build-agent-root',
-      icon: <RobotOutlined />,
-      label: 'SmartRAG Agent',
-      children: [
-        { key: '/build/smartrag-agent', icon: <RobotOutlined />, label: <Link to="/build/smartrag-agent">Agent 对话</Link> },
-        { key: '/build/agent-history', icon: <RobotOutlined />, label: <Link to="/build/agent-history">对话历史</Link> },
-      ],
-    },
     {
       key: 'build-material-root',
       icon: <FolderOpenOutlined />,
@@ -211,8 +252,6 @@ function BuildWorkspace() {
       children: [
         { key: '/build/rag-flow-builder', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flow-builder">流程构建</Link> },
         { key: '/build/rag-flows', icon: <NodeIndexOutlined />, label: <Link to="/build/rag-flows">流程列表</Link> },
-        { key: '/build/rag-experience', icon: <RobotOutlined />, label: <Link to="/build/rag-experience">流程体验</Link> },
-        { key: '/build/rag-run-history', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/rag-run-history">体验历史</Link> },
       ],
     },
     {
@@ -236,15 +275,13 @@ function BuildWorkspace() {
           className="configMenu"
           mode="inline"
           selectedKeys={[selectedKey]}
-          defaultOpenKeys={['build-agent-root', 'build-material-root', 'build-vector-root', 'build-rag-root', 'build-eval-root']}
+          defaultOpenKeys={['build-material-root', 'build-vector-root', 'build-rag-root', 'build-eval-root']}
           items={items}
         />
       </aside>
       <section className="workspaceContent">
         <Routes>
           <Route index element={<Navigate to="/build/material-parse" replace />} />
-          <Route path="smartrag-agent" element={<SmartRAGAgentPage />} />
-          <Route path="agent-history" element={<AgentRunHistoryPage />} />
           <Route path="material-parse" element={<MaterialParsePage />} />
           <Route path="parse-runs" element={<ParseRunsPage />} />
           <Route path="parse-runs/:runId" element={<ParseRunDetailPage />} />
@@ -258,8 +295,6 @@ function BuildWorkspace() {
           <Route path="rag-flow-builder" element={<RagFlowBuilderPage />} />
           <Route path="rag-flow-builder/:flowId" element={<RagFlowBuilderPage />} />
           <Route path="rag-flows" element={<RagFlowsPage />} />
-          <Route path="rag-experience" element={<RagFlowExperiencePage />} />
-          <Route path="rag-run-history" element={<RagFlowRunHistoryPage />} />
           <Route path="evaluation-datasets" element={<EvaluationDatasetsPage />} />
           <Route path="evaluation-datasets/:runId" element={<EvaluationDatasetDetailPage />} />
           <Route path="evaluation-dataset-runs" element={<EvaluationDatasetRunsPage />} />
@@ -267,6 +302,11 @@ function BuildWorkspace() {
           <Route path="evaluation-reports" element={<EvaluationReportsPage />} />
           <Route path="evaluation-report-list" element={<EvaluationReportListPage />} />
           <Route path="evaluation-reports/:runId" element={<EvaluationReportDetailPage />} />
+          {/* Redirects for moved pages */}
+          <Route path="smartrag-agent" element={<Navigate to="/chat/smartrag-agent" replace />} />
+          <Route path="agent-history" element={<Navigate to="/chat/agent-history" replace />} />
+          <Route path="rag-experience" element={<Navigate to="/chat/rag-experience" replace />} />
+          <Route path="rag-run-history" element={<Navigate to="/chat/rag-run-history" replace />} />
         </Routes>
       </section>
     </div>
@@ -329,6 +369,7 @@ function BottomNav() {
   const items = [
     { key: 'config', icon: <AppstoreOutlined />, label: '配置', to: '/config' },
     { key: 'build', icon: <BuildOutlined />, label: '构建', to: '/build' },
+    { key: 'chat', icon: <CommentOutlined />, label: '对话', to: '/chat' },
     { key: 'settings', icon: <SettingOutlined />, label: '设置', to: '/settings' },
   ]
 
@@ -358,6 +399,7 @@ function Shell() {
           <Route path="/" element={<Navigate to="/config" replace />} />
           <Route path="/config/*" element={<ConfigWorkspace />} />
           <Route path="/build/*" element={<BuildWorkspace />} />
+          <Route path="/chat/*" element={<ChatWorkspace />} />
           <Route path="/settings/*" element={<SettingsPage />} />
           <Route path="/models" element={<Navigate to="/config/llm" replace />} />
           <Route path="/agents" element={<Navigate to="/config/agent" replace />} />

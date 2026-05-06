@@ -58,14 +58,19 @@ export default function RagFlowRunHistoryPage() {
     {
       title: '流程',
       dataIndex: 'flow_id',
-      width: 140,
+      width: 150,
+      ellipsis: true,
       render: (fid: string) => flowNameMap[fid] || fid.slice(0, 8),
     },
-    { title: '问题', dataIndex: 'query', ellipsis: true },
+    {
+      title: '问题',
+      dataIndex: 'query',
+      ellipsis: true,
+    },
     {
       title: '状态',
       dataIndex: 'status',
-      width: 100,
+      width: 90,
       render: (s: string) => <Tag color={statusColor(s)}>{s}</Tag>,
     },
     { title: '耗时', dataIndex: 'latency_ms', width: 80, render: (v: number | null) => (v != null ? `${v}ms` : '-') },
@@ -126,6 +131,8 @@ export default function RagFlowRunHistoryPage() {
           loading={runs.isLoading}
           pagination={{ pageSize: 20 }}
           size="small"
+          tableLayout="fixed"
+          scroll={{ x: 800 }}
           locale={{ emptyText: <Empty description="暂无运行记录" /> }}
         />
       </Card>

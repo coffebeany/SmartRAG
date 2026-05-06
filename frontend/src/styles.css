@@ -548,7 +548,7 @@ body {
   bottom: 18px;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   width: min(520px, calc(100vw - 32px));
   padding: 6px;
   transform: translateX(-50%);

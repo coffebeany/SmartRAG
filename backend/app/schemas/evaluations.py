@@ -133,6 +133,14 @@ class EvaluationReportRunCreate(BaseModel):
     evaluator_config: dict = Field(default_factory=dict)
 
 
+class EvaluationReportRunBatchCreate(BaseModel):
+    flow_ids: list[str] = Field(min_length=1)
+    dataset_run_id: str
+    framework_id: str = "ragas"
+    metric_ids: list[str] = Field(default_factory=list)
+    evaluator_config: dict = Field(default_factory=dict)
+
+
 class EvaluationReportRunOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

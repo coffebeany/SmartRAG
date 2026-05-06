@@ -13,6 +13,7 @@ from app.schemas.evaluations import (
     EvaluationDatasetRunOut,
     EvaluationFrameworkOut,
     EvaluationReportItemsPageOut,
+    EvaluationReportRunBatchCreate,
     EvaluationReportRunCreate,
     EvaluationReportRunOut,
     ParseEvaluationRunCreate,
@@ -126,6 +127,27 @@ async def create_evaluation_report_run(
     run = await evaluation_service.create_evaluation_report_run(session, payload)
     background_tasks.add_task(evaluation_service.execute_evaluation_report_run, run.run_id)
     return run
+
+
+@router.post("/evaluation-report-runs/batch", response_model=list[EvaluationReportRunOut], status_code=status.HTTP_201_CREATED)
+async def batch_create_evaluation_report_runs(
+    payload: EvaluationReportRunBatchCreate,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+) -> list[EvaluationReportRunOut]:
+    runs: list[EvaluationReportRunOut] = []
+    for flow_id in payload.flow_ids:
+        single = EvaluationReportRunCreate(
+            flow_id=flow_id,
+            dataset_run_id=payload.dataset_run_id,
+            framework_id=payload.framework_id,
+            metric_ids=payload.metric_ids,
+            evaluator_config=payload.evaluator_config,
+        )
+        run = await evaluation_service.create_evaluation_report_run(session, single)
+        background_tasks.add_task(evaluation_service.execute_evaluation_report_run, run.run_id)
+        runs.append(run)
+    return runs
 
 
 @router.get("/evaluation-report-runs", response_model=list[EvaluationReportRunOut])

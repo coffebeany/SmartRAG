@@ -772,6 +772,14 @@ export function useCreateEvaluationReportRun() {
   })
 }
 
+export function useBatchCreateEvaluationReportRuns() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: unknown) => apiClient.post<EvaluationReportRun[]>('/evaluation-report-runs/batch', payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['evaluation-report-runs'] }),
+  })
+}
+
 export function useEvaluationReportRuns() {
   return useQuery({
     queryKey: ['evaluation-report-runs'],

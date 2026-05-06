@@ -16,6 +16,7 @@ from app.schemas.evaluations import (
     EvaluationDatasetItemCreate,
     EvaluationDatasetItemUpdate,
     EvaluationDatasetRunCreate,
+    EvaluationReportRunBatchCreate,
     EvaluationReportRunCreate,
     ParseEvaluationRunCreate,
 )
@@ -204,6 +205,10 @@ class UpdateEvaluationDatasetItemInput(EvaluationDatasetItemUpdate):
 
 
 class CreateEvaluationReportRunInput(EvaluationReportRunCreate):
+    pass
+
+
+class BatchCreateEvaluationReportRunInput(EvaluationReportRunBatchCreate):
     pass
 
 
@@ -1069,9 +1074,9 @@ async def delete_evaluation_dataset_item(ctx: AgentActionContext, payload: Datas
 
 @smartrag_action(name="create_evaluation_report_run", title="Create evaluation report run", input_model=CreateEvaluationReportRunInput, output_schema=OBJECT_SCHEMA, permission_scope="evaluation:write", tags=["evaluation"])
 async def create_evaluation_report_run(ctx: AgentActionContext, payload: CreateEvaluationReportRunInput) -> dict[str, Any]:
-    """Create and start an evaluation report run.
+    """Create and start an evaluation report run for a single RAG flow.
 
-    Use after a completed dataset_run_id and compatible RAG flow are known. The tool suspends until this report run reaches a terminal status, then returns the final run summary. Fails if the dataset is incomplete, flow is incompatible, framework unavailable, or required answer generator is missing.
+    Use after a completed dataset_run_id and compatible RAG flow are known. For evaluating multiple flows at once, use batch_create_evaluation_report_runs instead. The tool suspends until this report run reaches a terminal status, then returns the final run summary. Fails if the dataset is incomplete, flow is incompatible, framework unavailable, or required answer generator is missing.
     """
     run = await evaluations.create_evaluation_report_run(ctx.session, payload)
     _spawn_background_run(
@@ -1080,6 +1085,34 @@ async def create_evaluation_report_run(ctx: AgentActionContext, payload: CreateE
         run_id=run.run_id,
     )
     return {"run_id": run.run_id, "run": await _await_run_terminal(run.run_id, "evaluation_report")}
+
+
+@smartrag_action(name="batch_create_evaluation_report_runs", title="Batch create evaluation report runs", input_model=BatchCreateEvaluationReportRunInput, output_schema=LIST_SCHEMA, permission_scope="evaluation:write", tags=["evaluation"])
+async def batch_create_evaluation_report_runs(ctx: AgentActionContext, payload: BatchCreateEvaluationReportRunInput) -> list[dict[str, Any]]:
+    """Batch create and start evaluation report runs for multiple RAG flows using the same dataset and metrics.
+
+    Use when evaluating multiple RAG flows against the same evaluation dataset. Provide flow_ids (list of flow identifiers), dataset_run_id, framework_id and metric_ids. Each flow gets its own report run created and executed independently. The tool suspends until all report runs reach terminal status, then returns the list of final run summaries. Fails if the dataset is incomplete, any flow is incompatible, framework unavailable, or required answer generator is missing in any flow.
+    """
+    results: list[dict[str, Any]] = []
+    for flow_id in payload.flow_ids:
+        single = EvaluationReportRunCreate(
+            flow_id=flow_id,
+            dataset_run_id=payload.dataset_run_id,
+            framework_id=payload.framework_id,
+            metric_ids=payload.metric_ids,
+            evaluator_config=payload.evaluator_config,
+        )
+        run = await evaluations.create_evaluation_report_run(ctx.session, single)
+        _spawn_background_run(
+            evaluations.execute_evaluation_report_run(run.run_id),
+            run_type="evaluation_report",
+            run_id=run.run_id,
+        )
+        results.append({"run_id": run.run_id, "flow_id": flow_id})
+    terminal_results: list[dict[str, Any]] = []
+    for item in results:
+        terminal_results.append(await _await_run_terminal(item["run_id"], "evaluation_report"))
+    return terminal_results
 
 
 @smartrag_action(name="list_evaluation_report_runs", title="List evaluation report runs", output_schema=LIST_SCHEMA, tags=["evaluation"])

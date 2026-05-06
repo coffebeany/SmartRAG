@@ -22,6 +22,7 @@ import EvaluationDatasetDetailPage from './pages/EvaluationDatasetDetailPage'
 import EvaluationDatasetRunsPage from './pages/EvaluationDatasetRunsPage'
 import EvaluationDatasetsPage from './pages/EvaluationDatasetsPage'
 import EvaluationReportDetailPage from './pages/EvaluationReportDetailPage'
+import EvaluationReportListPage from './pages/EvaluationReportListPage'
 import EvaluationReportsPage from './pages/EvaluationReportsPage'
 import MaterialBatchDetailPage from './pages/MaterialBatchDetailPage'
 import MaterialBatchesPage from './pages/MaterialBatchesPage'
@@ -166,6 +167,8 @@ function BuildWorkspace() {
     selectedKey = '/build/evaluation-dataset-runs'
   }
   if (location.pathname.includes('/evaluation-reports')) selectedKey = '/build/evaluation-reports'
+  if (location.pathname.includes('/evaluation-reports/')) selectedKey = '/build/evaluation-report-list'
+  if (location.pathname.includes('/evaluation-report-list')) selectedKey = '/build/evaluation-report-list'
   if (location.pathname.includes('/chunk-compare')) selectedKey = '/build/chunk-compare'
   if (location.pathname.includes('/agent-history')) selectedKey = '/build/agent-history'
   else if (location.pathname.includes('/smartrag-agent')) selectedKey = '/build/smartrag-agent'
@@ -220,6 +223,7 @@ function BuildWorkspace() {
         { key: '/build/evaluation-datasets', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-datasets">测评集生成</Link> },
         { key: '/build/evaluation-dataset-runs', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-dataset-runs">测评集任务</Link> },
         { key: '/build/evaluation-reports', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-reports">应用测评</Link> },
+        { key: '/build/evaluation-report-list', icon: <FundProjectionScreenOutlined />, label: <Link to="/build/evaluation-report-list">测评报告</Link> },
       ],
     },
   ]
@@ -261,6 +265,7 @@ function BuildWorkspace() {
           <Route path="evaluation-dataset-runs" element={<EvaluationDatasetRunsPage />} />
           <Route path="evaluation-dataset-runs/:runId" element={<EvaluationDatasetDetailPage />} />
           <Route path="evaluation-reports" element={<EvaluationReportsPage />} />
+          <Route path="evaluation-report-list" element={<EvaluationReportListPage />} />
           <Route path="evaluation-reports/:runId" element={<EvaluationReportDetailPage />} />
         </Routes>
       </section>
